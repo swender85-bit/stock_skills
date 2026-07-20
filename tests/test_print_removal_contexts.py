@@ -88,7 +88,7 @@ class TestCmdWhatIfCallsRemovalContexts:
             "scripts",
             "run_portfolio.py",
         )
-        with open(portfolio_script) as f:
+        with open(portfolio_script, encoding="utf-8") as f:
             source = f.read()
 
         assert "print_removal_contexts" in source

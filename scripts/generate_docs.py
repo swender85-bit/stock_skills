@@ -19,6 +19,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Windows(cp932)でも日本語・記号の出力で落ちないよう UTF-8 に固定
+for _stream in ("stdout", "stderr"):
+    try:
+        getattr(sys, _stream).reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -222,7 +229,7 @@ def _load_annotations() -> dict[str, str]:
     if not ANNOTATIONS.exists():
         return {}
     result = {}
-    for line in ANNOTATIONS.read_text().splitlines():
+    for line in ANNOTATIONS.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -366,7 +373,7 @@ def _list_modules_for_layer(layer_path: Path, annotations: dict) -> str:
 
 def generate_architecture() -> str | None:
     """Generate Architecture section for CLAUDE.md. Returns None if no markers found."""
-    content = CLAUDE_MD.read_text()
+    content = CLAUDE_MD.read_text(encoding="utf-8")
     if BEGIN_ARCH not in content:
         return None
 
@@ -380,7 +387,7 @@ def generate_architecture() -> str | None:
     preset_count = 0
     if presets_file.exists():
         in_presets = False
-        for line in presets_file.read_text().splitlines():
+        for line in presets_file.read_text(encoding="utf-8").splitlines():
             if re.match(r"^presets:", line):
                 in_presets = True
                 continue
@@ -413,7 +420,7 @@ Docs:   docs/ (architecture, neo4j-schema, skill-catalog, api-reference, data-mo
     new_content = pattern.sub(new_section, content)
 
     if new_content != content:
-        CLAUDE_MD.write_text(new_content)
+        CLAUDE_MD.write_text(new_content, encoding="utf-8")
         return "updated"
     return "unchanged"
 
@@ -440,14 +447,14 @@ def generate_test_count() -> str | None:
 
     count = int(m.group(1))
 
-    content = DEV_MD.read_text()
+    content = DEV_MD.read_text(encoding="utf-8")
     new_content = re.sub(
         r"約\d+テスト",
         f"約{count}テスト",
         content,
     )
     if new_content != content:
-        DEV_MD.write_text(new_content)
+        DEV_MD.write_text(new_content, encoding="utf-8")
         return f"updated to {count}"
     return f"unchanged ({count})"
 
@@ -458,7 +465,7 @@ def generate_test_count() -> str | None:
 
 def _parse_skill_frontmatter(skill_md: Path) -> dict:
     """Parse YAML frontmatter from SKILL.md."""
-    text = skill_md.read_text()
+    text = skill_md.read_text(encoding="utf-8")
     if not text.startswith("---"):
         return {}
     end = text.find("---", 3)
@@ -475,7 +482,7 @@ def _parse_skill_frontmatter(skill_md: Path) -> dict:
 
 def generate_skill_catalog() -> str | None:
     """Update Overview table in skill-catalog.md."""
-    content = SKILL_CATALOG.read_text()
+    content = SKILL_CATALOG.read_text(encoding="utf-8")
     if BEGIN_OVERVIEW not in content:
         return None
 
@@ -509,7 +516,7 @@ def generate_skill_catalog() -> str | None:
     new_content = pattern.sub(new_section, content)
 
     if new_content != content:
-        SKILL_CATALOG.write_text(new_content)
+        SKILL_CATALOG.write_text(new_content, encoding="utf-8")
         return "updated"
     return "unchanged"
 
@@ -528,14 +535,14 @@ def verify_data_models() -> tuple[bool, list[str]]:
     if not DATA_MODELS.exists():
         return False, ["docs/data-models.md not found"]
 
-    doc_text = DATA_MODELS.read_text()
+    doc_text = DATA_MODELS.read_text(encoding="utf-8")
     # Extract keys from markdown table rows: | `key` |
     doc_keys = set(re.findall(r"\|\s*`(\w+)`\s*\|", doc_text))
 
     # Check stock_info fixture
     stock_info_path = FIXTURES / "stock_info.json"
     if stock_info_path.exists():
-        with open(stock_info_path) as f:
+        with open(stock_info_path, encoding="utf-8") as f:
             fixture_keys = set(json.load(f).keys())
         missing = fixture_keys - doc_keys
         extra = doc_keys - fixture_keys
@@ -546,7 +553,7 @@ def verify_data_models() -> tuple[bool, list[str]]:
     # Check stock_detail fixture
     stock_detail_path = FIXTURES / "stock_detail.json"
     if stock_detail_path.exists():
-        with open(stock_detail_path) as f:
+        with open(stock_detail_path, encoding="utf-8") as f:
             detail_keys = set(json.load(f).keys())
         missing = detail_keys - doc_keys
         if missing:
@@ -570,11 +577,11 @@ def check_staleness(quiet: bool = False) -> int:
     new_content = generate_api_reference()
     if not API_REF.exists():
         stale.append("api-reference.md: not found (run 'generate_docs.py api-reference')")
-    elif API_REF.read_text() != new_content:
+    elif API_REF.read_text(encoding="utf-8") != new_content:
         stale.append("api-reference.md: stale")
 
     # 2. architecture markers
-    content = CLAUDE_MD.read_text()
+    content = CLAUDE_MD.read_text(encoding="utf-8")
     if BEGIN_ARCH not in content:
         stale.append("CLAUDE.md: no architecture markers")
 
@@ -638,10 +645,10 @@ def run_all():
 def _write_if_changed(path: Path, content: str, label: str):
     """Write file only if content differs."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and path.read_text() == content:
+    if path.exists() and path.read_text(encoding="utf-8") == content:
         print(f"  {label}: unchanged")
     else:
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
         print(f"  {label}: updated")
 
 

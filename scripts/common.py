@@ -1,9 +1,45 @@
 """Common utilities for skill scripts -- graceful imports and context."""
 
 import signal
+import sys
+from contextlib import contextmanager
 from typing import Optional
 
+# 全スキルスクリプトはこのモジュールを import する。Windows(cp932)では
+# 日本語や '—'(em dash) 等の出力で UnicodeEncodeError クラッシュするため、
+# 実ストリームを UTF-8 に固定する（pytest のキャプチャ等 reconfigure 非対応の
+# ストリームは except で握り潰して素通り = 無害）。KIK upgrade v1.0。
+for _stream in ("stdout", "stderr"):
+    try:
+        getattr(sys, _stream).reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 _CONTEXT_TIMEOUT = 10  # seconds — max wait for context/suggestions
+
+# SIGALRM は Unix 専用。Windows には存在しないため、あるときだけハードタイムアウトを使う。
+_HAS_SIGALRM = hasattr(signal, "SIGALRM")
+
+
+@contextmanager
+def _timeout_guard(seconds: int):
+    """ベストエフォートのタイムアウト。
+
+    Unix では SIGALRM で `seconds` 秒に制限する。SIGALRM を持たない環境
+    （Windows 等）では**タイムアウトなしで実処理を実行**する。以前は
+    `signal.SIGALRM` の AttributeError が握り潰され、コンテキスト取得や提案が
+    Windows で丸ごと無効化されていた（KIK upgrade v1.0 で修正）。
+    """
+    if _HAS_SIGALRM:
+        old = signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old)
+    else:
+        yield
 
 
 def try_import(module_path: str, *names: str):
@@ -83,13 +119,8 @@ def print_context(user_input: str) -> Optional[str]:
     try:
         from src.data.context.auto_context import get_context
 
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(_CONTEXT_TIMEOUT)
-        try:
+        with _timeout_guard(_CONTEXT_TIMEOUT):
             result = get_context(user_input)
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
 
         if result and result.get("context_markdown"):
             print(result["context_markdown"])
@@ -112,9 +143,7 @@ def print_removal_contexts(symbols: list[str]) -> None:
     try:
         from src.data.context.auto_context import get_context
 
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(_CONTEXT_TIMEOUT)
-        try:
+        with _timeout_guard(_CONTEXT_TIMEOUT):
             contexts = []
             for sym in symbols:
                 result = get_context(sym)
@@ -125,9 +154,6 @@ def print_removal_contexts(symbols: list[str]) -> None:
                 print("## 売却候補のコンテキスト (KIK-470)\n")
                 print("\n\n".join(contexts))
                 print()
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
     except Exception:
         pass  # graceful degradation
 
@@ -150,17 +176,12 @@ def print_suggestions(
     try:
         from src.core.proactive_engine import format_suggestions, get_suggestions
 
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(_CONTEXT_TIMEOUT)
-        try:
+        with _timeout_guard(_CONTEXT_TIMEOUT):
             suggestions = get_suggestions(
                 context=context_summary,
                 symbol=symbol,
                 sector=sector,
             )
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
 
         output = format_suggestions(suggestions)
         if output:

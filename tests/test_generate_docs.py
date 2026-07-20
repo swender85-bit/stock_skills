@@ -284,7 +284,7 @@ class TestGenerateArchitecture:
         with patch.object(generate_docs, "CLAUDE_MD", claude_md):
             result = generate_docs.generate_architecture()
         assert result in ("updated", "unchanged")
-        content = claude_md.read_text()
+        content = claude_md.read_text(encoding="utf-8")
         assert "Skills" in content
         assert "Core" in content
 
@@ -325,7 +325,7 @@ class TestPresetCount:
             (tmp_path / "config").mkdir(exist_ok=True)
             result = generate_docs.generate_architecture()
         assert result == "updated"
-        content = claude_md.read_text()
+        content = claude_md.read_text(encoding="utf-8")
         assert "3 presets" in content
 
     def test_zero_presets_when_no_file(self, tmp_path):
@@ -341,7 +341,7 @@ class TestPresetCount:
             (tmp_path / "skills").mkdir()
             result = generate_docs.generate_architecture()
         assert result == "updated"
-        content = claude_md.read_text()
+        content = claude_md.read_text(encoding="utf-8")
         assert "0 presets" in content
 
 
@@ -361,7 +361,7 @@ class TestGenerateSkillCatalog:
              patch.object(generate_docs, "SKILLS_DIR", tmp_path / "skills"):
             result = generate_docs.generate_skill_catalog()
         assert result == "updated"
-        content = catalog.read_text()
+        content = catalog.read_text(encoding="utf-8")
         assert "test-skill" in content
         assert "A test skill" in content
 
