@@ -1,0 +1,34 @@
+name: tests
+
+# push / PR で pytest を自動実行（upgrade v1.0 Phase 3）
+# テストは conftest の autouse フィクスチャで外部I/O(Neo4j/TEI/Grok)を全モックするため、
+# ネットワーク・シークレット不要で回る。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Verify docs are in sync
+        run: python scripts/generate_docs.py check --quiet
