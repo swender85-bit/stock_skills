@@ -66,10 +66,14 @@ _DESTRUCTIVE_BASH = [
     re.compile(r"\brm\s+-[rf]{1,2}\b"),      # rm -rf / rm -r / rm -f
     re.compile(r"\brmdir\b"),
     re.compile(r"\bgit\s+push\s+.*(--force|-f)\b"),
-    re.compile(r">\s*[^>]"),                   # 単一 > によるリダイレクト（>> 追記は除外）
     re.compile(r"\bmv\s+.*\s+/dev/null\b"),
     re.compile(r"\btruncate\b"),
 ]
+
+# 単一 `>` による上書きリダイレクトの「書き込み先トークン」を抽出する。
+# - `>>`（追記）は除外 / `2>` `&>`（stderr 系）は除外（先頭に数字や & がある）
+# - `>/dev/null` のような無害な破棄先は _PROTECTED_IN_CMD 側で弾かれる
+_REDIRECT_TARGET = re.compile(r"(?<![>\d&])>(?!>)\s*(\S+)")
 
 
 # 保護対象を「パス境界」で判定（例: appdata/ の data/ を誤検知しない）
@@ -89,14 +93,32 @@ _PROTECTED_IN_CMD = [
 ]
 
 
+def _token_is_protected(token: str) -> bool:
+    return any(rx.search(token) for rx in _PROTECTED_IN_CMD)
+
+
 def bash_targets_protected(command: str) -> bool:
-    """Bash コマンドが破壊的で、かつ保護対象パスを（パス境界で）含むか。"""
+    """Bash コマンドが保護領域を破壊しうるか。
+
+    2通りで判定:
+      1. 破壊的コマンド（rm -rf 等）＋ コマンド中に保護対象パスが出現
+      2. 単一 `>` の上書きリダイレクトが、保護対象パスを *書き込み先* にしている
+         （`2>/dev/null` や `>/dev/null` のような stderr抑制・破棄は誤検知しない）
+    """
     if not command:
         return False
+
+    # 1. 破壊的コマンド × 保護対象パスの共起
     destructive = any(rx.search(command) for rx in _DESTRUCTIVE_BASH)
-    if not destructive:
-        return False
-    return any(rx.search(command) for rx in _PROTECTED_IN_CMD)
+    if destructive and _token_is_protected(command):
+        return True
+
+    # 2. 上書きリダイレクトの書き込み先が保護対象
+    for m in _REDIRECT_TARGET.finditer(command):
+        if _token_is_protected(m.group(1)):
+            return True
+
+    return False
 
 
 def block(reason: str) -> None:

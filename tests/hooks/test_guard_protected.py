@@ -92,3 +92,30 @@ def test_block_rm_history_dir():
     code = _run({"tool_name": "Bash", "tool_input": {
         "command": "rm -rf data/history/trade"}})
     assert code == 2
+
+
+def test_allow_stderr_redirect_reading_data(tmp_path):
+    # `2>/dev/null` は stderr抑制であって破壊ではない。data/ の読取と共起しても許可
+    cmd = "ls src/data/graph_query/ 2>/dev/null && grep x src/data/note_manager.py"
+    code = _run({"tool_name": "Bash", "tool_input": {"command": cmd}})
+    assert code == 0
+
+
+def test_allow_redirect_to_devnull():
+    code = _run({"tool_name": "Bash", "tool_input": {
+        "command": "python scripts/run.py > /dev/null"}})
+    assert code == 0
+
+
+def test_block_overwrite_redirect_into_portfolio():
+    # 単一 > で portfolio.csv を上書き（truncate）するのはブロック
+    code = _run({"tool_name": "Bash", "tool_input": {
+        "command": "echo bad > .claude/skills/stock-portfolio/data/portfolio.csv"}})
+    assert code == 2
+
+
+def test_allow_append_redirect_to_log():
+    # >> 追記や非保護先への > は許可
+    code = _run({"tool_name": "Bash", "tool_input": {
+        "command": "echo hi >> build/out.log"}})
+    assert code == 0
