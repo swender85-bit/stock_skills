@@ -246,7 +246,9 @@ def _load_annotations() -> dict[str, str]:
 def _collect_modules(base: Path) -> list[tuple[str, Path]]:
     """Collect all .py modules under base, sorted by dotted path."""
     modules = []
-    for py_file in sorted(base.rglob("*.py")):
+    # OS非依存の安定ソート: Windowsは大小文字を区別しないため sorted(Path) の順序が
+    # Linux と食い違い、api-reference が「古い」と誤判定される。as_posix() のバイト列で固定。
+    for py_file in sorted(base.rglob("*.py"), key=lambda p: p.as_posix()):
         rel = py_file.relative_to(ROOT)
         # Skip __pycache__
         if "__pycache__" in str(rel):
@@ -345,8 +347,8 @@ def _list_modules_for_layer(layer_path: Path, annotations: dict) -> str:
 
     parts = []
     # Group by subpackage
-    subdirs = sorted([d for d in layer_path.iterdir() if d.is_dir() and not d.name.startswith("_")])
-    standalone = sorted([f for f in layer_path.iterdir() if f.suffix == ".py" and f.name != "__init__.py" and not f.name.startswith("_")])
+    subdirs = sorted([d for d in layer_path.iterdir() if d.is_dir() and not d.name.startswith("_")], key=lambda p: p.as_posix())
+    standalone = sorted([f for f in layer_path.iterdir() if f.suffix == ".py" and f.name != "__init__.py" and not f.name.startswith("_")], key=lambda p: p.as_posix())
 
     # Subdirectories first
     for d in subdirs:
@@ -420,7 +422,7 @@ Docs:   docs/ (architecture, neo4j-schema, skill-catalog, api-reference, data-mo
     new_content = pattern.sub(new_section, content)
 
     if new_content != content:
-        CLAUDE_MD.write_text(new_content, encoding="utf-8")
+        CLAUDE_MD.write_text(new_content, encoding="utf-8", newline="\n")
         return "updated"
     return "unchanged"
 
@@ -454,7 +456,7 @@ def generate_test_count() -> str | None:
         content,
     )
     if new_content != content:
-        DEV_MD.write_text(new_content, encoding="utf-8")
+        DEV_MD.write_text(new_content, encoding="utf-8", newline="\n")
         return f"updated to {count}"
     return f"unchanged ({count})"
 
@@ -487,7 +489,7 @@ def generate_skill_catalog() -> str | None:
         return None
 
     skills = []
-    for skill_dir in sorted(SKILLS_DIR.iterdir()):
+    for skill_dir in sorted(SKILLS_DIR.iterdir(), key=lambda p: p.as_posix()):
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.exists():
             continue
@@ -516,7 +518,7 @@ def generate_skill_catalog() -> str | None:
     new_content = pattern.sub(new_section, content)
 
     if new_content != content:
-        SKILL_CATALOG.write_text(new_content, encoding="utf-8")
+        SKILL_CATALOG.write_text(new_content, encoding="utf-8", newline="\n")
         return "updated"
     return "unchanged"
 
@@ -648,7 +650,7 @@ def _write_if_changed(path: Path, content: str, label: str):
     if path.exists() and path.read_text(encoding="utf-8") == content:
         print(f"  {label}: unchanged")
     else:
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="\n")
         print(f"  {label}: updated")
 
 
