@@ -67,15 +67,28 @@ Docs:   docs/ (architecture, neo4j-schema, skill-catalog, api-reference, data-mo
 
 自動生成: `docs/api-reference.md`、`CLAUDE.md` Architecture、`development.md` テスト数、`docs/skill-catalog.md` 概要（pre-commit hook で自動実行）
 手動更新: `intent-routing.md`、該当 `SKILL.md`、`rules/*.md`、`README.md`
-## Obsidian Vault
-保存先: C:\Users\swend\iCloudDrive\swender
-株の分析結果は「投資記録」フォルダに保存する。
-ファイル名は「銘柄_分析_日付.md」形式にする。
-## Obsidian自動保存ルール
-分析結果は必ず以下に自動保存すること。毎回指示しなくてよい。
-保存先: C:\Users\swend\iCloudDrive\Obsidian\swender\投資記録\
-ファイル名: 銘柄または分析種別_YYYYMMDD.md
-フォーマット: Obsidian Markdown（wikiリンク・フロントマター使用）
+## Obsidian Vault / 分析結果の保存ルール
+
+**唯一の正しい保存先**: `C:\Users\swend\iCloudDrive\swender\投資記録\`
+（`.obsidian/` フォルダを持つ実 vault はこちら。旧記載の `iCloudDrive\Obsidian\swender` は vault ではないため使わない — KIK upgrade v1.0 で統一）
+
+- 分析結果は必ず「投資記録」フォルダに自動保存する（毎回指示しなくてよい）。
+- ファイル名: `銘柄または分析種別_YYYYMMDD.md`（例: `7203T_分析_20260718.md`）
+- フォーマット: Obsidian Markdown（frontmatter + wikiリンク）。frontmatter は `title` / `tags` / `created` を含める。
+
+### 保存＝検証の統一入口（upgrade v1.0 Phase 2）
+
+分析 Markdown を「output/ 保存 → vault 同期 → 実在＋体裁検証」まで一括で行う統一 CLI:
+
+```bash
+python scripts/save_report.py --name "7203T_分析_YYYYMMDD.md" --stdin < report.md
+```
+
+- 保存先は `config/output.yaml` の `obsidian_vault_path` を参照（上記の実 vault パス）。
+- 非破壊: 同名ファイルがあれば上書きせず `_v2` 等を付けて保存。
+- vault 未設定/不在なら `output/` のみで完了し案内を表示（graceful degradation）。
+- 検証 NG（未達・空・体裁不備）なら exit code 1。「完了＝実物が届き検証済み」を保証する。
+- Python から使う場合: `from src.output.sync import save_and_sync`。
 
 ## 投資ポートフォリオ（ユーザー保有 / 投資作業時は毎回参照すること）
 

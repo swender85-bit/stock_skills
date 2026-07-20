@@ -72,19 +72,31 @@ _DESTRUCTIVE_BASH = [
 ]
 
 
+# 保護対象を「パス境界」で判定（例: appdata/ の data/ を誤検知しない）
+_PROTECTED_IN_CMD = [
+    re.compile(r"(?<![\w.])\.env(?![\w])", re.IGNORECASE),   # .env トークン
+    re.compile(r"portfolio\.csv", re.IGNORECASE),
+    re.compile(r"[^\s\"']*\.pem(?![\w])", re.IGNORECASE),
+    re.compile(r"[^\s\"']*\.key(?![\w])", re.IGNORECASE),
+    re.compile(r"(?<![\w])data[\\/]", re.IGNORECASE),         # /data/ だが appdata/ は除外
+    re.compile(r"(?<![\w])notes[\\/]", re.IGNORECASE),
+    re.compile(r"(?<![\w])history[\\/]", re.IGNORECASE),
+    re.compile(r"(?<![\w])watchlists?[\\/]", re.IGNORECASE),
+    re.compile(r"(?<![\w])screening_results[\\/]", re.IGNORECASE),
+    re.compile(r"iclouddrive", re.IGNORECASE),               # vault
+    re.compile(r"swender", re.IGNORECASE),                   # vault（swend 単体は非対象）
+    re.compile("投資記録"),                                    # vault サブフォルダ
+]
+
+
 def bash_targets_protected(command: str) -> bool:
-    """Bash コマンドが破壊的で、かつ保護対象パスを含むか。"""
+    """Bash コマンドが破壊的で、かつ保護対象パスを（パス境界で）含むか。"""
     if not command:
         return False
-    lc = command.lower()
     destructive = any(rx.search(command) for rx in _DESTRUCTIVE_BASH)
     if not destructive:
         return False
-    # コマンド文字列中に保護対象を示す語が含まれるか（破壊的コマンド前提なので広めに判定）
-    protected_words = [".env", "portfolio.csv", "data/", "data\\",
-                       "notes", "history", "watchlist",
-                       "iclouddrive", "swender", ".pem", ".key"]
-    return any(w in lc for w in protected_words)
+    return any(rx.search(command) for rx in _PROTECTED_IN_CMD)
 
 
 def block(reason: str) -> None:

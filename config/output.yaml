@@ -1,0 +1,21 @@
+# 分析レポートの保存先設定（upgrade v1.0 Phase 2）
+#
+# 各スキルは分析結果をまず output/ に Markdown 生成し、ここで指定した
+# Obsidian vault へコピー（同期）する。届いたことを検証してから「完了」とする。
+#
+# パスが空 or 実在しない場合は output/ のみで完了する（graceful degradation）。
+
+# Obsidian vault の投資記録フォルダ。
+# 実データ検証（.obsidian フォルダの所在）で確定した「本物の保管庫」:
+#   C:\Users\swend\iCloudDrive\swender\  … こちらが Obsidian が実際に開く vault
+#   （iCloudDrive\Obsidian\swender は vault ではないため保存しても表示されない）
+obsidian_vault_path: "C:/Users/swend/iCloudDrive/swender/投資記録"
+
+# 追加のコピー先（任意）。未使用なら空文字のまま。
+icloud_path: ""
+
+# リポジトリ内の作業用出力ディレクトリ（gitignore 推奨）
+local_output_dir: "output"
+
+# 同名ファイルが既にある場合の扱い: "version"（_v2, _v3 と連番）/ "skip"（コピーしない）
+on_conflict: "version"

@@ -18,6 +18,7 @@ def _run(payload: dict) -> int:
         input=json.dumps(payload),
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return proc.returncode
 

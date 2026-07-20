@@ -18,6 +18,7 @@ def _run(payload: dict) -> int:
         input=json.dumps(payload),
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return proc.returncode
 
@@ -78,3 +79,16 @@ def test_allow_normal_bash():
 def test_allow_rm_rf_nonprotected():
     code = _run({"tool_name": "Bash", "tool_input": {"command": "rm -rf build/"}})
     assert code == 0
+
+
+def test_allow_rm_in_appdata_not_false_positive():
+    # AppData/ の中の "data/" を保護対象と誤検知しないこと（過剰ブロック回帰）
+    cmd = "rm -f /c/Users/swend/AppData/Local/Temp/scratchpad/output/x.md"
+    code = _run({"tool_name": "Bash", "tool_input": {"command": cmd}})
+    assert code == 0
+
+
+def test_block_rm_history_dir():
+    code = _run({"tool_name": "Bash", "tool_input": {
+        "command": "rm -rf data/history/trade"}})
+    assert code == 2
