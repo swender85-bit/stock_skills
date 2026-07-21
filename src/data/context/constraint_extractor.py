@@ -205,12 +205,26 @@ def _extract_symbols(user_query: str) -> list[str]:
 
 
 def _load_lessons() -> list[dict]:
-    """Load all lesson-type notes."""
+    """Load lesson-type notes eligible to become plan-check constraints.
+
+    Fable5 第2弾 案B P4 / 第1弾 案3:
+    結果由来(outcome)のlessonは運を教師にしたものなので制約にしない。
+    validity envelope が切れたものも棚上げする。通過分には ``_gate`` が付き、
+    呼び出し側で判定理由を表示できる。ゲートが使えない環境では従来動作。
+    """
     try:
         from src.data.note_manager import load_notes
-        return load_notes(note_type="lesson")
+        lessons = load_notes(note_type="lesson")
     except ImportError:
         return []
+
+    try:
+        from src.core.lesson_gate import detect_current_regime, gate_lessons
+    except ImportError:
+        return lessons
+
+    passed, _shelved = gate_lessons(lessons, current_regime=detect_current_regime())
+    return passed
 
 
 def _build_enriched_query(user_query: str, action_type: str) -> str:
@@ -313,7 +327,7 @@ def _lesson_to_constraint(lesson: dict, relevance_score: float) -> dict:
     first_line = content.split("\n")[0][:60] if content else ""
     source = first_line or lesson.get("id", "unknown")
 
-    return {
+    constraint = {
         "id": lesson.get("id", ""),
         "trigger": trigger,
         "expected_action": expected_action,
@@ -321,3 +335,13 @@ def _lesson_to_constraint(lesson: dict, relevance_score: float) -> dict:
         "community": _classify_community(lesson),
         "relevance_score": round(relevance_score, 2),
     }
+
+    # 制約が自己弁明する: どの出自で、なぜ今も有効なのかを添える(第1弾 案3)
+    gate = lesson.get("_gate")
+    if gate:
+        constraint["origin"] = gate.get("origin", "")
+        constraint["gate_verdict"] = gate.get("verdict", "")
+        constraint["gate_label"] = gate.get("label", "")
+        constraint["gate_reasons"] = list(gate.get("reasons") or [])
+
+    return constraint

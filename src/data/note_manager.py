@@ -34,6 +34,8 @@ def save_note(
     expected_action: Optional[str] = None,
     stop_loss: Optional[str] = None,
     take_profit: Optional[str] = None,
+    origin: Optional[str] = None,
+    validity: Optional[dict] = None,
 ) -> dict:
     """Save a note to JSON file and Neo4j.
 
@@ -108,6 +110,13 @@ def save_note(
             note["trigger"] = trigger
         if expected_action:
             note["expected_action"] = expected_action
+        # Fable5 案B: 出自(process/outcome/legacy)。未指定は legacy 扱いで
+        # 従来どおり制約になれる = 既存挙動と一致する。
+        if origin:
+            note["origin"] = origin
+        # Fable5 案3: validity envelope(生成時レジーム・想定有効期限)
+        if validity:
+            note["validity"] = validity
 
     # KIK-566: exit-rule specific fields
     if note_type == "exit-rule":

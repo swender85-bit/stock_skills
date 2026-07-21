@@ -44,12 +44,26 @@ def _abs(path: str) -> str:
         return os.path.normcase(path or "")
 
 
+def _is_source_tree(path: str) -> bool:
+    """`src/` 配下はソースコードであってデータマスターではない。
+
+    PROTECTED_SUBSTRINGS は `/data/` `/history/` `/notes/` を部分一致で見るため、
+    素のままだと `src/data/history/...` のようなソースファイルまで保護対象に
+    誤判定してしまう（実際に src/data/context/*.py の編集がブロックされた）。
+    秘密鍵・.env はこの例外より優先されるので、ここでは扱わない。
+    """
+    parts = _abs(path).split(os.sep)
+    return "src" in parts
+
+
 def is_protected(path: str) -> bool:
     if not path:
         return False
     p = _abs(path)
     if p.endswith(PROTECTED_SUFFIXES):
         return True
+    if _is_source_tree(p):
+        return False
     return any(sub in p for sub in PROTECTED_SUBSTRINGS)
 
 

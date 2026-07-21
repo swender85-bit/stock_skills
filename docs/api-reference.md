@@ -33,6 +33,30 @@ Shared utility functions used across multiple core modules.
 - `finite_or_none(v)` — Return v if finite number, else None.
 - `safe_float(value, default: float=0.0) -> float` — Convert value to float safely, returning default on failure.
 
+### src.core.decision.package
+
+Decision package: 蛻､譁ｭ繝代ャ繧ｱ繝ｼ繧ｸ縺ｮ讒狗ｯ峨�ｻ蟆∝魂繝ｻ豌ｸ邯壼喧 (譯�B P1/P2/P5).
+
+- `classify_by_disclosure_time(items: Iterable[dict], decided_at: Any, used_labels: Optional[Iterable[str]]=None) -> InformationBoundary` — 髢狗､ｺ繧ｿ繧､繝繧ｹ繧ｿ繝ｳ繝励ｒ菴ｿ縺｣縺ｦ蜿ｯ遏･髮�蜷医ｒ讖滓｢ｰ逧�縺ｫ蛻�繧雁��縺代ｋ (譯�B P5).
+- `build_package(symbol: str, decision: str, rationale: str='', boundary: Optional[InformationBoundary | dict]=None, alternatives: Optional[list[dict]]=None, confidence: Optional[float]=None, source: str='manual', decided_at: Any=None) -> dict` — 蛻､譁ｭ繝代ャ繧ｱ繝ｼ繧ｸ繧呈ｧ狗ｯ峨＠縺ｦ蟆∝魂縺吶ｋ (譯�B P1).
+- `save_package(package: dict, base_dir: str=_PACKAGES_DIR) -> Path` — 繝代ャ繧ｱ繝ｼ繧ｸ繧谷SON縺ｧ豌ｸ邯壼喧縺吶ｋ縲�JSON縺稽aster縲¨eo4j縺ｯview縲�
+- `load_package(package_id: str, base_dir: str=_PACKAGES_DIR) -> Optional[dict]` — ID縺ｧ繝代ャ繧ｱ繝ｼ繧ｸ繧定ｪｭ縺ｿ霎ｼ繧縲ょｭ伜惠縺励↑縺代ｌ縺ｰ None縲�
+- `list_packages(symbol: Optional[str]=None, base_dir: str=_PACKAGES_DIR) -> list[dict]` — 菫晏ｭ俶ｸ医∩繝代ャ繧ｱ繝ｼ繧ｸ繧呈眠縺励＞鬆�縺ｫ霑斐☆縲Ｔymbol 謖�螳壹〒邨槭ｊ霎ｼ繧縲�
+- `verify_package(package: dict) -> bool` — 蟆∝魂貂医∩繝代ャ繧ｱ繝ｼ繧ｸ縺梧隼螟峨＆繧後※縺�縺ｪ縺�縺区､懆ｨｼ縺吶ｋ (譯�B 蜿励￠蜈･繧悟渕貅鳳1)縲�
+
+#### class InformationBoundary
+蛻､譁ｭ譎らせ縺ｮ蜿ｯ遏･髮�蜷医�
+
+| Field | Type |
+|:---|:---|
+| `used` | `list[dict]` |
+| `available_unused` | `list[dict]` |
+| `unknowable` | `list[dict]` |
+
+- `to_dict() -> dict`
+- `from_dict(data: Optional[dict]) -> 'InformationBoundary'`
+- `overlaps() -> list[str]` — 蜷御ｸ繝ｩ繝吶Ν縺瑚､�謨ｰ蛹ｺ蛻�縺ｫ迴ｾ繧後※縺�縺ｪ縺�縺区､懈渊縺吶ｋ(謗剃ｻ匁ｧ縺ｮ讀懆ｨｼ)縲�
+
 ### src.core.health.community
 
 Community concentration analysis for portfolio health checks (KIK-549, KIK-576).
@@ -95,6 +119,18 @@ Backward-compatible re-export (KIK-576). Import from src.core.health.etf directl
 
 Backward-compatible re-export (KIK-576). Import from src.core.health.labels directly.
 
+
+### src.core.lesson_gate
+
+Lesson gate -- 險俶�ｶ繧呈擅莉ｶ莉倥″蛯ｵ蜍吶→縺励※謇ｱ縺�讀懆ｨｼ繧ｲ繝ｼ繝� (Fable5 隨ｬ1蠑ｾ 譯�3 + 隨ｬ2蠑ｾ 譯�B P4).
+
+- `verdict_label(verdict: str) -> str` — 蛻､螳壹�ｮ譌･譛ｬ隱槭Λ繝吶Ν縲�
+- `lesson_origin(lesson: dict) -> str` — lesson 縺ｮ蜃ｺ閾ｪ繧定ｿ斐☆縲よ悴險ｭ螳壹�ｯ legacy(蟆主�･蜑阪�ｮ譌｢蟄詫esson)縺ｨ縺ｿ縺ｪ縺吶�
+- `is_constraint_eligible(lesson: dict) -> bool` — plan-check 縺ｮ蛻ｶ邏�縺ｫ縺ｪ繧玖ｳ�譬ｼ縺後≠繧九° (譯�B 蜿励￠蜈･繧悟渕貅鳳4).
+- `build_envelope(regime: Optional[list[str]]=None, valid_until: Any=None, conditions: Optional[dict]=None) -> dict` — validity envelope 繧剃ｽ懊ｋ縲�
+- `evaluate_lesson(lesson: dict, current_regime: Optional[list[str]]=None, today: Optional[date]=None) -> dict` — lesson 1莉ｶ繧偵ご繝ｼ繝医↓騾壹＠縲∝愛螳壹→逅�逕ｱ繧定ｿ斐☆縲�
+- `gate_lessons(lessons: list[dict], current_regime: Optional[list[str]]=None, today: Optional[date]=None, drop_shelved: bool=True) -> tuple[list[dict], list[dict]]` — lesson 鄒､繧偵ご繝ｼ繝医↓騾壹☆縲�
+- `detect_current_regime() -> list[str]` — 迴ｾ蝨ｨ縺ｮ蟶ょｴ繝ｬ繧ｸ繝ｼ繝繧ｿ繧ｰ繧呈耳螳壹☆繧九ょ叙蠕励〒縺阪↑縺代ｌ縺ｰ遨ｺ繝ｪ繧ｹ繝医�
 
 ### src.core.market_dashboard
 
@@ -661,6 +697,22 @@ Screen stocks for value investment opportunities.
 
 - `screen(symbols: Optional[list[str]]=None, criteria: Optional[dict]=None, preset: Optional[str]=None, top_n: int=20) -> list[dict]` — Run the screening process and return the top results.
 
+### src.core.temporal
+
+Temporal discipline and seal hashing -- shared foundation (Fable5 隨ｬ2蠑ｾ 蜈ｱ騾壼渕逶､).
+
+- `market_of(symbol: str) -> str` — 繝�繧｣繝�繧ｫ繝ｼ縺九ｉ蟶ょｴ繧ｭ繝ｼ繧呈耳螳壹☆繧九ゅし繝輔ぅ繝�繧ｯ繧ｹ縺ｪ縺励�ｯ邀ｳ蝗ｽ謇ｱ縺�縲�
+- `market_offset(market: str, dt_utc: Optional[datetime]=None) -> int` — 蟶ょｴ縺ｮUTC繧ｪ繝輔そ繝�繝�(譎る俣)縲らｱｳ蝗ｽ縺ｮ縺ｿDST繧貞渚譏縺吶ｋ縲�
+- `now_utc() -> datetime` — 繧ｿ繧､繝繧ｾ繝ｼ繝ｳ莉倥″縺ｮ迴ｾ蝨ｨUTC譎ょ綾縲�
+- `stamp(market: str=DEFAULT_MARKET, at: Optional[datetime]=None) -> dict` — UTC + 蟶ょｴ繝ｭ繝ｼ繧ｫ繝ｫ譎ょ綾繧剃ｽｵ險倥＠縺溘ち繧､繝繧ｹ繧ｿ繝ｳ繝励ｒ菴懊ｋ縲�
+- `stamp_for_symbol(symbol: str, at: Optional[datetime]=None) -> dict` — 繝�繧｣繝�繧ｫ繝ｼ縺九ｉ蟶ょｴ繧呈耳螳壹＠縺ｦ繧ｿ繧､繝繧ｹ繧ｿ繝ｳ繝励ｒ菴懊ｋ縲�
+- `parse_instant(value: Any) -> Optional[datetime]` — ISO8601譁�蟄怜�� / datetime / stamp縺ｮdict 繧� tz-aware UTC datetime 縺ｫ豁｣隕丞喧縺吶ｋ縲�
+- `compare_instants(a: Any, b: Any) -> Optional[int]` — 2譎ょ綾縺ｮ蜑榊ｾ後ｒ豈碑ｼ�縺吶ｋ縲Ｂ<b 縺ｧ -1縲∥==b 縺ｧ 0縲∥>b 縺ｧ 1縲ょ愛螳壻ｸ崎�ｽ縺ｪ繧� None縲�
+- `canonical_json(payload: Any) -> str` — 繝上ャ繧ｷ繝･蜈･蜉帷畑縺ｮ豁｣貅褒SON縲ゅく繝ｼ鬆�繧貞崋螳壹＠遨ｺ逋ｽ繧呈賜髯､縺吶ｋ縲�
+- `seal(payload: dict) -> str` — payload 縺ｮ蟆∝魂繝上ャ繧ｷ繝･(sha256)繧定ｨ育ｮ励☆繧九�
+- `apply_seal(payload: dict) -> dict` — payload 縺ｫ蟆∝魂繝上ャ繧ｷ繝･繧貞沂繧∬ｾｼ繧薙〒霑斐☆(蜈�縺ｮdict繧貞､画峩縺吶ｋ)縲�
+- `verify_seal(payload: dict) -> bool` — 蟆∝魂貂医∩ payload 縺梧隼螟峨＆繧後※縺�縺ｪ縺�縺九ｒ讀懆ｨｼ縺吶ｋ縲�
+
 ### src.core.ticker_utils
 
 Ticker symbol utilities: currency/country inference from symbol suffixes.
@@ -1025,7 +1077,7 @@ Linear API client for action item management (KIK-472).
 
 Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 
-- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None, stop_loss: Optional[str]=None, take_profit: Optional[str]=None) -> dict` — Save a note to JSON file and Neo4j.
+- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None, stop_loss: Optional[str]=None, take_profit: Optional[str]=None, origin: Optional[str]=None, validity: Optional[dict]=None) -> dict` — Save a note to JSON file and Neo4j.
 - `load_notes(symbol: Optional[str]=None, note_type: Optional[str]=None, category: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load notes from JSON files.
 - `check_lesson_conflicts(new_lesson: dict, base_dir: str=_NOTES_DIR, similarity_threshold: float=0.5) -> list[dict]` — Check if a new lesson conflicts with existing lessons (KIK-564/570).
 - `get_exit_rules(symbol: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load exit-rule notes, optionally filtered by symbol (KIK-566).
