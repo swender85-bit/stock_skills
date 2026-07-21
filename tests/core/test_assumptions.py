@@ -121,6 +121,22 @@ class TestAssumptionHHI:
         assert result["level"] == "unknown"
         assert "抽出できませんでした" in result["message"]
 
+    def test_assumptions_about_unheld_symbols_are_excluded(self):
+        """売却済み・検討只の銘柄の前提が混ざると HHI が不当に下がる。"""
+        mapping = {"AI設備投資拡大": ["SOXL"], "円安継続": ["QCOM"]}
+        holdings = [{"symbol": "SOXL", "value": 1000}]
+        result = assumption_hhi(mapping, holdings)
+        assert "円安継続" not in result["exposure"]
+        assert result["top_assumption"] == "AI設備投資拡大"
+
+    def test_no_overlap_with_holdings_is_unknown_not_diversified(self):
+        """保有と紐づく前提がゼロのとき HHI 0.0 を『分散』と報告しない（偽の安心）。"""
+        mapping = {"円安継続": ["QCOM"]}
+        holdings = [{"symbol": "SOXL", "value": 1000}]
+        result = assumption_hhi(mapping, holdings)
+        assert result["level"] == "unknown"
+        assert "分散しているという意味ではありません" in result["message"]
+
     def test_message_names_the_dominant_assumption(self):
         mapping = {"円安継続": ["A", "B", "C"]}
         holdings = [{"symbol": s, "value": 100} for s in ("A", "B", "C")]

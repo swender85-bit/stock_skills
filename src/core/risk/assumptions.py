@@ -163,6 +163,27 @@ def build_assumption_map(notes: Iterable[dict]) -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in sorted(mapping.items())}
 
 
+def restrict_to_holdings(
+    assumption_map: dict[str, list[str]], holdings: Optional[list[dict]]
+) -> dict[str, list[str]]:
+    """保有していない銘柄の前提を落とす。
+
+    thesis は売却済み銘柄や検討だけした銘柄についても書かれている。
+    それらの前提を混ぜると、**保有していない銘柄由来の前提が exposure 0 で
+    紛れ込み、HHI が不当に下がって「分散している」という偽の安心を生む。**
+    """
+    if not holdings:
+        return dict(assumption_map)
+
+    held = {h.get("symbol", "") for h in holdings if h.get("symbol")}
+    restricted: dict[str, list[str]] = {}
+    for assumption, symbols in assumption_map.items():
+        kept = [s for s in symbols if s in held]
+        if kept:
+            restricted[assumption] = kept
+    return restricted
+
+
 def assumption_exposure(
     assumption_map: dict[str, list[str]],
     holdings: Optional[list[dict]] = None,
@@ -211,8 +232,13 @@ def assumption_hhi(
     dict
         {"hhi", "level", "top_assumption", "top_share", "exposure", "assumption_count"}
     """
+    assumption_map = restrict_to_holdings(assumption_map, holdings)
     exposure = assumption_exposure(assumption_map, holdings)
-    if not exposure:
+    total = sum(exposure.values())
+
+    # 前提が無い、または保有と紐づく前提の重みがゼロ。
+    # ここで HHI 0.0 を「分散している」と報告すると偽の安心になる。
+    if not exposure or total <= 0:
         return {
             "hhi": 0.0,
             "level": "unknown",
@@ -220,10 +246,12 @@ def assumption_hhi(
             "top_share": 0.0,
             "exposure": {},
             "assumption_count": 0,
-            "message": "thesis から前提を抽出できませんでした。投資理由をメモに残すと前提集中を測れます。",
+            "message": (
+                "保有銘柄に紐づく前提を thesis から抽出できませんでした。"
+                "**前提が分散しているという意味ではありません — 測れていないだけです。**"
+                "投資理由をメモに残すと前提集中を測れます。"
+            ),
         }
-
-    total = sum(exposure.values())
     weights = [v / total for v in exposure.values()] if total > 0 else []
     hhi = compute_hhi(weights) if weights else 0.0
 
@@ -326,7 +354,7 @@ def analyze_assumption_space(
         except Exception:
             notes = []
 
-    assumption_map = build_assumption_map(notes)
+    assumption_map = restrict_to_holdings(build_assumption_map(notes), holdings)
     concentration = assumption_hhi(assumption_map, holdings)
     scenarios = build_personal_scenarios(assumption_map, holdings, limit=limit)
 

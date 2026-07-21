@@ -22,6 +22,36 @@ from portfolio_commands import (
 )
 
 
+def _auto_decision_package(
+    symbol: str, action: str, rationale: str = "", price: float | None = None
+) -> None:
+    """売買時に判断パッケージを自動生成して封印する (Fable5 案B P2).
+
+    重要判断の可知集合を、結果が出る前に凍結する。ここで凍結しなかった判断は
+    **永久に再審不能**になる（後から作れば必ず後知恵で汚染される）。
+
+    可知集合はこの時点では埋まっていない。ユーザーが後で
+    `used` / `available_unused` を補えるよう、空のパッケージを作って保存する。
+    全て graceful degradation で、失敗しても売買記録は完結する。
+    """
+    try:
+        from src.core.decision import build_package, save_package
+
+        package = build_package(
+            symbol=symbol,
+            decision=action,
+            rationale=rationale,
+            source=f"portfolio-{action}",
+        )
+        save_package(package)
+        print(
+            f"  📦 判断パッケージを凍結: {package['id']}\n"
+            f"     可知集合（使った情報／見落とした情報）を後から補えます。"
+        )
+    except Exception:
+        pass  # 記録は付加価値。売買そのものを壊さない
+
+
 def cmd_buy(
     csv_path: str,
     symbol: str,
@@ -73,6 +103,7 @@ def cmd_buy(
                 except Exception as e:
                     print(f"Warning: 履歴保存失敗: {e}", file=sys.stderr)
                 _save_trade_market_context()
+            _auto_decision_package(symbol, "buy", memo, price)
             return
     else:
         holdings = _fallback_load_csv(csv_path)
@@ -119,6 +150,8 @@ def cmd_buy(
             sync_portfolio(_holdings)
         except Exception:
             pass
+
+    _auto_decision_package(symbol, "buy", memo, price)
 
 
 def cmd_sell(
@@ -212,6 +245,7 @@ def cmd_sell(
                 except Exception as e:
                     print(f"Warning: 履歴保存失敗: {e}", file=sys.stderr)
                 _save_trade_market_context()
+            _auto_decision_package(symbol, "sell", "", sell_price)
             return
         except ValueError as e:
             print(f"Error: {e}")
@@ -253,3 +287,5 @@ def cmd_sell(
             sync_portfolio(_holdings)
         except Exception:
             pass
+
+    _auto_decision_package(symbol, "sell", "", sell_price)

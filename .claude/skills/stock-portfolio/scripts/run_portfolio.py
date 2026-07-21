@@ -88,6 +88,31 @@ def cmd_health(csv_path: str) -> None:
     """Run health check -- wrapper that stores health_data for action items."""
     global _last_health_data
     _last_health_data = _cmd_health_inner(csv_path)
+    _print_fable5_diagnostics(_last_health_data)
+
+
+def _print_fable5_diagnostics(health_data: dict | None) -> None:
+    """Fable5 の構造診断を health に足す（政策カバレッジ/投資家診断/前提HHI/汚染度）。
+
+    全て graceful degradation。診断が出せなくてもヘルスチェック本体は完結する。
+    """
+    try:
+        from src.output.fable5_formatter import format_fable5_health_section
+
+        positions = (health_data or {}).get("positions") or []
+        holdings = [
+            {
+                "symbol": p.get("symbol", ""),
+                "value": float(p.get("value") or p.get("market_value") or 0.0),
+            }
+            for p in positions
+            if p.get("symbol")
+        ]
+        section = format_fable5_health_section(holdings)
+        if section:
+            print(section)
+    except Exception:
+        pass  # 診断は付加価値。失敗してもヘルスチェックを壊さない
 
 
 def cmd_simulate(csv_path: str, years: int = 10, monthly_add: float = 0.0,

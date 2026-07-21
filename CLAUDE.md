@@ -53,7 +53,7 @@ pip install -r requirements.txt
 Skills (.claude/skills/*/SKILL.md → scripts/*.py) — 9スキル
 Core   (src/core/) — decision/, health/, policy/, portfolio/, ports/, research/, risk/, screening/, action_item_bridge, action_item_detector, common, health_check, health_etf, health_labels, lesson_gate, market_dashboard, models, proactive_engine, provenance, return_estimate, technicals, temporal, ticker_utils, value_trap
 Data   (src/data/) — context/, graph_query/, graph_store/, grok_client/, history/, yahoo_client/, embedding_client, lesson_community, lesson_conflict, linear_client, note_manager, question_log, rakuten_rss, user_profile
-Output (src/output/) — adjust_formatter, analyze_formatter, forecast_formatter, formatter, health_formatter, portfolio_formatter, rebalance_formatter, research_formatter, review_formatter, screening_summary_formatter, simulate_formatter, stress_formatter, sync, verify, weekly_formatter
+Output (src/output/) — adjust_formatter, analyze_formatter, fable5_formatter, forecast_formatter, formatter, health_formatter, portfolio_formatter, rebalance_formatter, research_formatter, review_formatter, screening_summary_formatter, simulate_formatter, stress_formatter, sync, verify, weekly_formatter
 
 Config: config/screening_presets.yaml (16 presets), config/exchanges.yaml (60+ regions)
 Rules:  .claude/rules/ (graph-context, intent-routing, workflow, development, screening, portfolio, testing)

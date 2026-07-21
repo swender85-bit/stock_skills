@@ -1,0 +1,25 @@
+{
+  "id": "dp_2026-07-21_NVDA_858a7874",
+  "symbol": "NVDA",
+  "market": "US",
+  "decision": "buy",
+  "rationale": "",
+  "decided_at": {
+    "utc": "2026-07-21T14:20:43+00:00",
+    "market": "US",
+    "market_tz": "America/New_York",
+    "market_local": "2026-07-21T10:20:43-04:00",
+    "offset_hours": -4
+  },
+  "information_boundary": {
+    "used": [],
+    "available_unused": [],
+    "unknowable": []
+  },
+  "alternatives": [],
+  "confidence": null,
+  "source": "portfolio-buy",
+  "process_review": null,
+  "outcome": null,
+  "sealed": false
+}

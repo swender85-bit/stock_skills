@@ -49,6 +49,17 @@ MACRO_FACTORS = _corr["MACRO_FACTORS"] if _has_corr else []
 _, _rec = try_import("src.core.risk.recommender", "generate_recommendations")
 generate_recommendations = _rec["generate_recommendations"]
 
+# Fable5 案2: 前提空間ダイバーシフィケーション（内生シナリオ）
+_HAS_ASSUMPTIONS, _asm = try_import(
+    "src.core.risk.assumptions", "analyze_assumption_space")
+analyze_assumption_space = _asm["analyze_assumption_space"]
+
+# Fable5 案A: 政策台帳（シナリオごとの事前応答）
+_HAS_POLICY, _pol = try_import(
+    "src.core.policy", "list_policies", "coverage_rate")
+list_policies = _pol["list_policies"]
+coverage_rate = _pol["coverage_rate"]
+
 # KIK-428: History auto-save — module availability from common.py (KIK-448)
 HAS_HISTORY = HAS_HISTORY_STORE
 if HAS_HISTORY:
@@ -207,6 +218,118 @@ def _fallback_print_shock_sensitivity(portfolio: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def print_assumption_scenarios(
+    portfolio: list[dict], sensitivities: list[dict], weights: list[float]
+) -> Optional[dict]:
+    """前提空間の集中度と「あなたの前提が反転した世界」を出す (Fable5 案2).
+
+    固定8シナリオとは**別枠**。一般的な暴落では見えない、
+    ユーザー固有の信念グラフ由来の弱点を突く。
+    """
+    if not _HAS_ASSUMPTIONS or analyze_assumption_space is None:
+        return None
+
+    try:
+        holdings = [
+            {"symbol": s.get("symbol", ""), "value": float(s.get("weight") or 0.0)}
+            for s in portfolio
+        ]
+        result = analyze_assumption_space(holdings=holdings)
+    except Exception:
+        return None  # graceful degradation
+
+    conc = result.get("concentration") or {}
+    print("## 前提空間の集中度 (Fable5 案2)\n")
+    print("> セクター・地域の分散は資産空間の話。ここで見るのは**前提空間**の分散。")
+    print("> 価格相関は前提相関の遅行指標なので、相関に現れる前に検出できる。\n")
+    print(conc.get("message", ""))
+    print()
+
+    exposure = conc.get("exposure") or {}
+    if exposure:
+        print("| 前提 | 依存している保有比率 | 銘柄 |")
+        print("|:---|---:|:---|")
+        for assumption, share in sorted(
+            exposure.items(), key=lambda kv: kv[1], reverse=True
+        ):
+            symbols = ", ".join((result.get("assumption_map") or {}).get(assumption, []))
+            print(f"| {assumption} | {share * 100:.1f}% | {symbols} |")
+        print()
+
+    scenarios = result.get("scenarios") or []
+    if not scenarios:
+        print("（前提の反転シナリオは生成されませんでした。"
+              "thesis メモが増えるほど精度が上がります）\n")
+        return result
+
+    print("### あなたの前提が反転した世界\n")
+    for scenario in scenarios:
+        print(f"#### {scenario['name']}\n")
+        print(f"- 引き金: {scenario['trigger']}")
+        print(f"- 影響を受ける保有: {', '.join(scenario.get('exposed_symbols') or []) or '—'}")
+
+        if analyze_portfolio_scenario is not None:
+            try:
+                analysis = analyze_portfolio_scenario(
+                    portfolio=portfolio,
+                    sensitivities=sensitivities,
+                    weights=weights,
+                    scenario=scenario,
+                )
+                print(f"- PF影響率: {analysis.get('portfolio_impact', 0) * 100:.1f}%")
+                print(f"- 判定: {analysis.get('judgment', '-')}")
+            except Exception:
+                pass
+        print()
+
+    return result
+
+
+def print_policy_coverage(portfolio: list[dict]) -> None:
+    """シナリオに対する事前応答（政策）の有無を出す (Fable5 案A P3).
+
+    ストレステストは弱点を知らせるが、「その事態が来たら何をするか」が
+    白紙のままでは意味が半減する。撤退条件が未定義の保有を名指しする。
+    """
+    if not _HAS_POLICY or coverage_rate is None:
+        return
+
+    try:
+        holdings = [
+            {"symbol": s.get("symbol", ""), "value": float(s.get("weight") or 0.0)}
+            for s in portfolio
+        ]
+        coverage = coverage_rate(holdings)
+    except Exception:
+        return
+
+    print("## 事前応答（政策）のカバレッジ (Fable5 案A)\n")
+    print(
+        f"- 撤退条件が定義済みの保有: "
+        f"{coverage['covered_count']}/{coverage['holdings_count']}銘柄 "
+        f"(評価額ベース {coverage['value_rate'] * 100:.1f}%)"
+    )
+
+    uncovered = coverage.get("uncovered_symbols") or []
+    if uncovered:
+        print(f"- ⚠️ **事前応答が白紙の銘柄**: {', '.join(uncovered)}")
+        print()
+        print(
+            "> 上のシナリオが現実になったとき、これらの銘柄については"
+            "**その場で判断することになる**。ストレス下の即興判断は"
+            "行動ファイナンス上の最大の損失源。"
+        )
+        print("> 平時のいま、政策を決めておくことを推奨する:")
+        print("> ```")
+        print(f"> python scripts/manage_policy.py add --symbol {uncovered[0]} \\")
+        print(">     --response \"全株売却\" --trigger \"drawdown_pct<=-25\" \\")
+        print(">     --expires YYYY-MM-DD")
+        print("> ```")
+    else:
+        print("- ✅ 全保有に事前応答が定義済み。")
+    print()
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -374,6 +497,11 @@ def main():
             weights=final_weights,
             scenario=scenario_def,
         )
+
+        # Fable5: 固定シナリオの後に、内生シナリオと事前応答カバレッジを出す
+        print()
+        print_assumption_scenarios(portfolio, sensitivities, final_weights)
+        print_policy_coverage(portfolio)
     else:
         print("## Step 4-7: シナリオ分析\n")
         print(
