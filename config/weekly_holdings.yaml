@@ -1,0 +1,94 @@
+# 週次レポート用の保有銘柄定義
+#
+# 出典: CLAUDE.md 「投資ポートフォリオ」基準スナップショット (2026/6/13 楽天証券実値)
+# CLAUDE.md の基準スナップショットは改変しない。ここはその機械可読な写しであり、
+# 数量・取得単価が変わったときだけ更新する（週次の株価は毎回 API で取り直す）。
+#
+# quote_symbol: 株価取得に使うティッカー。null なら価格取得をスキップし、
+#               last_known_price を使う（投信など yfinance に無い銘柄）。
+
+base_currency: JPY
+
+# 為替の取得元。取得できない場合 fallback_rate を使う。
+fx:
+  usdjpy_symbol: "JPY=X"
+  fallback_rate: 160.23   # 2026/6/13 基準
+
+holdings:
+  - name: "SOXL (半導体3x)"
+    quote_symbol: "SOXL"
+    account: "特定"
+    shares: 275
+    cost_price: 29.7495
+    currency: USD
+    category: "米国レバレッジETF"
+    leverage: 3
+
+  - name: "TECL (テック3x)"
+    quote_symbol: "TECL"
+    account: "特定"
+    shares: 154
+    cost_price: 105.3282
+    currency: USD
+    category: "米国レバレッジETF"
+    leverage: 3
+
+  - name: "TQQQ (ナス100 3x)"
+    quote_symbol: "TQQQ"
+    account: "特定"
+    shares: 214
+    cost_price: 26.8726
+    currency: USD
+    category: "米国レバレッジETF"
+    leverage: 3
+
+  - name: "味の素"
+    quote_symbol: "2802.T"
+    account: "特定"
+    shares: 400
+    cost_price: 3906.03
+    currency: JPY
+    category: "日本・食品"
+
+  - name: "味の素"
+    quote_symbol: "2802.T"
+    account: "NISA成長"
+    shares: 39
+    cost_price: 4813.00
+    currency: JPY
+    category: "日本・食品"
+
+  - name: "ニトリHD"
+    quote_symbol: "9843.T"
+    account: "特定"
+    shares: 345
+    cost_price: 3477.00
+    currency: JPY
+    category: "日本・小売"
+
+  - name: "トーメンデバイス"
+    quote_symbol: "2737.T"
+    account: "特定"
+    shares: 40
+    cost_price: 14230.00
+    currency: JPY
+    category: "日本・半導体商社"
+
+  # 投信は yfinance にティッカーが無いため価格取得をスキップする。
+  # 単位は「口」。基準価額は 10,000口 あたりの円。
+  - name: "iFreeNEXT FANG+"
+    quote_symbol: null
+    account: "NISAつみたて"
+    shares: 144592
+    unit_divisor: 10000
+    cost_price: 72618.13
+    last_known_price: 91955
+    currency: JPY
+    category: "米国グロース投信"
+    note: "¥5万/月の積立(DCA)継続中。壊れない1倍の保険コア、非売却。"
+
+cash:
+  - name: "米ドル現金(INTC弾)"
+    amount: 23776.76
+    currency: USD
+    note: "逆回転の大底用に温存。FOMC等の関門通過後に1/3ずつ分割投入。"

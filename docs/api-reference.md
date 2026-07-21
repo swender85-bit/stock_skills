@@ -328,6 +328,15 @@ What-If portfolio simulation (KIK-376, KIK-451).
 - `remove_positions(current: list[dict], removals: list[dict]) -> list[dict]` — Remove specified shares from the current portfolio (simulation only).
 - `run_what_if_simulation(csv_path: str, proposed: list[dict], client, removals: list[dict] | None=None) -> dict` — Run What-If simulation comparing before/after portfolio metrics.
 
+### src.core.portfolio.projection
+
+繝昴�ｼ繝医ヵ繧ｩ繝ｪ繧ｪ謗ｨ遘ｻ莠域ｸｬ 窶� 遏ｭ譛�/荳ｭ譛�/髟ｷ譛� (騾ｱ谺｡繝ｬ繝昴�ｼ繝育畑).
+
+- `volatility_drag(annual_vol_pct: float, leverage: int=1) -> float` — 繝ｬ繝舌Ξ繝�繧ｸETF縺ｮ繝懊Λ繝�繧｣繝ｪ繝�繧｣繝ｻ繝峨Λ繝�繧ｰ(蟷ｴ邇�%)縲�
+- `project_value(current_value: float, annual_return_pct: float, annual_vol_pct: float, days: int, leverage: int=1) -> dict` — 蟷ｾ菴輔ヶ繝ｩ繧ｦ繝ｳ驕句虚繧剃ｻｮ螳壹＠縺滉ｾ｡蛟､縺ｮ繝ｬ繝ｳ繧ｸ莠域ｸｬ縲�
+- `project_portfolio(positions: list[dict], cash_value: float=0.0, monthly_contribution: float=0.0) -> dict` — PF蜈ｨ菴薙�ｮ遏ｭ譛�/荳ｭ譛�/髟ｷ譛溘�ｮ謗ｨ遘ｻ莠域ｸｬ縲�
+- `drawdown_scenario(positions: list[dict], underlying_drop_pct: float, cash_value: float=0.0) -> dict` — 蜴溯ｳ�逕｣縺梧欠螳�%荳玖誠縺励◆縺ｨ縺阪�ｮPF隧穂ｾ｡鬘�(繝ｬ繝舌Ξ繝�繧ｸ蛟咲紫繧貞渚譏).
+
 ### src.core.portfolio.simulator
 
 Portfolio compound interest simulation engine (KIK-366).
@@ -342,6 +351,17 @@ Small-cap classification and allocation rules (KIK-438/574).
 
 - `classify_market_cap(market_cap: float | None, region_code: str) -> str` — Classify stock size from market cap and region code.
 - `check_small_cap_allocation(small_cap_weight: float) -> dict` — Check portfolio-level small-cap allocation.
+
+### src.core.portfolio.weekly
+
+騾ｱ谺｡繝昴�ｼ繝医ヵ繧ｩ繝ｪ繧ｪ蛻�譫舌Ξ繝昴�ｼ繝医�ｮ邨�縺ｿ遶九※.
+
+- `load_holdings_config(path: str=...) -> dict` — 菫晄怏螳夂ｾｩ YAML 繧定ｪｭ繧縲�
+- `resolve_holdings(config: dict, rss_snapshot: Optional[dict]=None) -> tuple[list[dict], str]` — 菫晄怏繝ｪ繧ｹ繝医ｒ豎ｺ螳壹☆繧九３SS 繧ｹ繝翫ャ繝励す繝ｧ繝�繝医′縺ゅｌ縺ｰ縺昴■繧峨ｒ豁｣縺ｨ縺吶ｋ縲�
+- `fetch_prices(symbols: list[str], client: Any=None) -> dict[str, dict]` — 蜷�驫俶氛縺ｮ邨ょ､譎らｳｻ蛻励→繝輔ぃ繝ｳ繝繝｡繝ｳ繧ｿ繝ｫ繧貞叙蠕励☆繧九�
+- `week_close(history: Any, as_of: Optional[date]=None) -> Optional[dict]` — 縺昴�ｮ騾ｱ縺ｮ譛邨らｵょ､縺ｨ騾ｱ髢馴ｨｰ關ｽ邇�繧貞叙繧雁�ｺ縺吶�
+- `analyze_holding(holding: dict, price_data: Optional[dict], fx_rate: float) -> dict` — 1驫俶氛蛻�縺ｮ螳悟�ｨ縺ｪ蛻�譫舌ｒ邨�縺ｿ遶九※繧九�
+- `build_report_data(config: dict, rss_snapshot: Optional[dict]=None, client: Any=None, fx_rate: Optional[float]=None, monthly_contribution: float=50000.0) -> dict` — 繝ｬ繝昴�ｼ繝医↓蠢�隕√↑繝�繝ｼ繧ｿ繧貞�ｨ縺ｦ髮�繧√ｋ縲�
 
 ### src.core.ports.graph
 
@@ -696,6 +716,21 @@ ValueScreener: legacy symbol-list-based value screening.
 Screen stocks for value investment opportunities.
 
 - `screen(symbols: Optional[list[str]]=None, criteria: Optional[dict]=None, preset: Optional[str]=None, top_n: int=20) -> list[dict]` — Run the screening process and return the top results.
+
+### src.core.technicals
+
+繝�繧ｯ繝九き繝ｫ謖�讓吶→驕守�ｱ/螢ｲ繧峨ｌ縺吶℃蛻､螳� (騾ｱ谺｡繝ｬ繝昴�ｼ繝育畑).
+
+- `sma(values: Any, window: int) -> Optional[float]` — 蜊倡ｴ皮ｧｻ蜍募ｹｳ蝮�縲ゅョ繝ｼ繧ｿ荳崎ｶｳ縺ｪ繧� None縲�
+- `rsi(values: Any, period: int=14) -> Optional[float]` — Wilder 縺ｮ RSI(譛譁ｰ蛟､)縲ゅョ繝ｼ繧ｿ荳崎ｶｳ縺ｪ繧� None縲�
+- `ema(values: Any, span: int) -> Optional[float]` — 謖�謨ｰ遘ｻ蜍募ｹｳ蝮�縲�
+- `macd(values: Any, fast: int=12, slow: int=26, signal: int=9) -> Optional[dict]` — MACD縲�{"macd", "signal", "histogram"} 繧定ｿ斐☆縲ゅョ繝ｼ繧ｿ荳崎ｶｳ縺ｪ繧� None縲�
+- `bollinger(values: Any, window: int=20, num_std: float=2.0) -> Optional[dict]` — 繝懊Μ繝ｳ繧ｸ繝｣繝ｼ繝舌Φ繝峨�{"upper","middle","lower","percent_b"} 繧定ｿ斐☆縲�
+- `high_low_range(values: Any, window: int=252, min_points: int=20) -> Optional[dict]` — 52騾ｱ(譌｢螳�252蝟ｶ讌ｭ譌･)縺ｮ鬮伜､繝ｻ螳牙､縺ｨ迴ｾ蝨ｨ菴咲ｽｮ縲�
+- `volatility(values: Any, window: int=20, annualize: bool=True) -> Optional[float]` — 譌･谺｡繝ｪ繧ｿ繝ｼ繝ｳ縺ｮ讓呎ｺ門￥蟾ｮ縲Ｂnnualize=True 縺ｧ蟷ｴ邇�謠帷ｮ�(%)縲�
+- `heat_label(state: str) -> str`
+- `assess_heat(indicators: dict) -> dict` — 隍�謨ｰ謖�讓吶ｒ蜷郁ｭｰ縺励※驕守�ｱ/螢ｲ繧峨ｌ縺吶℃繧貞愛螳壹☆繧九�
+- `analyze_prices(closes: Any) -> dict` — 邨ょ､邉ｻ蛻励°繧蛾ｱ谺｡繝ｬ繝昴�ｼ繝育畑縺ｮ繝�繧ｯ繝九き繝ｫ荳蠑上ｒ險育ｮ励☆繧九�
 
 ### src.core.temporal
 
@@ -1084,6 +1119,19 @@ Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 - `check_exit_rule(symbol: str, pnl_pct: float, base_dir: str=_NOTES_DIR) -> Optional[dict]` — Check if a position has hit any exit-rule threshold (KIK-566).
 - `delete_note(note_id: str, base_dir: str=_NOTES_DIR) -> bool` — Delete a note by ID from JSON files.
 
+### src.data.rakuten_rss
+
+讌ｽ螟ｩ險ｼ蛻ｸ 繝槭�ｼ繧ｱ繝�繝医せ繝斐�ｼ繝迂I RSS 繧ｹ繝翫ャ繝励す繝ｧ繝�繝医�ｮ隱ｭ縺ｿ蜿悶ｊ.
+
+- `normalize_code(code: Any, currency: Optional[str]=None) -> str` — 讌ｽ螟ｩ縺ｮ驫俶氛繧ｳ繝ｼ繝峨ｒ yfinance 繝�繧｣繝�繧ｫ繝ｼ縺ｫ豁｣隕丞喧縺吶ｋ縲�
+- `read_snapshot(path: str | os.PathLike) -> dict` — MS2 RSS 繧ｹ繝翫ャ繝励す繝ｧ繝�繝�(xlsx/csv)繧定ｪｭ縺ｿ霎ｼ繧縲�
+- `merge_with_fallback(snapshot_holdings: list[dict], price_lookup: Optional[dict[str, float]]=None) -> list[dict]` — RSS 縺ｧ迴ｾ蝨ｨ蛟､縺悟叙繧後↑縺九▲縺滄釜譟�繧偵∝挨繧ｽ繝ｼ繧ｹ縺ｮ譬ｪ萓｡縺ｧ陬懷ｮ後☆繧九�
+- `snapshot_freshness(snapshot: dict, max_age_hours: float=72.0) -> dict` — 繧ｹ繝翫ャ繝励す繝ｧ繝�繝医�ｮ魄ｮ蠎ｦ繧貞愛螳壹☆繧九�
+
+#### class SnapshotUnavailable
+繧ｹ繝翫ャ繝励す繝ｧ繝�繝医′隱ｭ繧√↑縺�(譛ｪ險ｭ螳壹�ｻ荳榊惠繝ｻ遨ｺ)縲�
+
+
 ### src.data.user_profile
 
 User profile settings loader (KIK-599).
@@ -1257,3 +1305,9 @@ Simulation and what-if output formatters (KIK-447, split from portfolio_formatte
 繝ｬ繝昴�ｼ繝亥ｮ御ｺ�讀懆ｨｼ�ｼ�upgrade v1.0 Phase 2�ｼ�
 
 - `verify_report(path: str) -> Dict[str, Any]`
+
+### src.output.weekly_formatter
+
+騾ｱ谺｡PF蛻�譫舌Ξ繝昴�ｼ繝医�ｮ Markdown 謨ｴ蠖｢ (Obsidian 蜷代￠).
+
+- `format_weekly_report(data: dict, as_of: Optional[datetime]=None) -> str` — 騾ｱ谺｡繝ｬ繝昴�ｼ繝亥�ｨ菴薙ｒ Markdown 譁�蟄怜�励↓縺吶ｋ縲�
