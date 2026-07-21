@@ -1,0 +1,27 @@
+{
+  "id": "pol_2026-07-21_2802_T_aedcc560",
+  "symbol": "2802.T",
+  "market": "JP",
+  "intent": "conditional_commit",
+  "response": "全株売却",
+  "rationale": "本命は営業CF悪化。価格は補助条件",
+  "triggers": [
+    {
+      "metric": "drawdown_pct",
+      "op": "<=",
+      "value": -25.0
+    }
+  ],
+  "created_at": {
+    "utc": "2026-07-21T13:18:26+00:00",
+    "market": "JP",
+    "market_tz": "Asia/Tokyo",
+    "market_local": "2026-07-21T22:18:26+09:00",
+    "offset_hours": 9
+  },
+  "expires_on": "2027-01-31",
+  "status": "expired",
+  "revision": 1,
+  "history": [],
+  "expired_reason": "動作デモ用の登録。ユーザー未承認のため無効化"
+}
