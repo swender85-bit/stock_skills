@@ -101,6 +101,7 @@ class TestIsAvailable:
 
     def test_no_sdk(self, monkeypatch):
         monkeypatch.setenv("MOOMOO_ENABLED", "on")
+        monkeypatch.setattr(mc, "_opend_reachable", lambda: True)
         monkeypatch.setattr(mc, "_import_sdk", lambda: None)
         assert mc.is_available() is False
         assert mc.get_error_status()["status"] == "no_sdk"
@@ -113,6 +114,15 @@ class TestIsAvailable:
         st = mc.get_error_status()
         assert st["status"] == "opend_unreachable"
         assert "11111" in st["message"]
+
+    def test_unreachable_opend_skips_sdk_import(self, monkeypatch):
+        """SDK import は1.2秒かかる。OpenD が居ないなら払わない。"""
+        monkeypatch.setenv("MOOMOO_ENABLED", "on")
+        imported = []
+        monkeypatch.setattr(mc, "_import_sdk", lambda: imported.append(1))
+        monkeypatch.setattr(mc, "_opend_reachable", lambda: False)
+        assert mc.is_available() is False
+        assert imported == []
 
     def test_all_conditions_met(self, monkeypatch):
         monkeypatch.setenv("MOOMOO_ENABLED", "on")

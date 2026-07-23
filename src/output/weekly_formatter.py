@@ -86,12 +86,38 @@ def _frontmatter(data: dict, stamp: str) -> str:
     )
 
 
+#: 保有構成の取り込みがこれより古いと警告する（日）
+_IMPORT_STALE_DAYS = 30
+
+
+def _import_age_days(exported_at: Any) -> Optional[int]:
+    """取り込み時刻からの経過日数。判定できなければ None。
+
+    ここで 0 を返すと「古くない」と誤読されるので、
+    パースできない場合は必ず None を返す。
+    """
+    if not exported_at:
+        return None
+    try:
+        from datetime import timezone
+
+        ts = datetime.fromisoformat(str(exported_at))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return max(0, (datetime.now(timezone.utc) - ts).days)
+    except (ValueError, TypeError):
+        return None
+
+
 def _header(data: dict, now: datetime) -> str:
     source = data.get("holdings_source")
+    imported = data.get("holdings_import") or {}
     source_label = {
         "rakuten-rss": "楽天証券 MarketSpeed II RSS（実口座）",
         "config": "config/weekly_holdings.yaml（CLAUDE.md 基準スナップショット）",
     }.get(source, source)
+    if source == "config" and imported.get("type") == "rakuten_csv":
+        source_label = "楽天証券 保有商品一覧CSV（実口座）"
 
     lines = [
         f"# 週次ポートフォリオ分析 {now.strftime('%Y-%m-%d')}",
@@ -110,6 +136,23 @@ def _header(data: dict, now: datetime) -> str:
         freshness = snapshot.get("_freshness")
         if freshness and not freshness.get("fresh"):
             lines.append(f"- {freshness.get('message')}")
+    elif imported.get("type") == "rakuten_csv":
+        exported = str(imported.get("exported_at") or "")[:16].replace("T", " ")
+        lines.append(
+            f"- 保有構成の取り込み: {imported.get('file')}（{exported} 時点）"
+        )
+        age_days = _import_age_days(imported.get("exported_at"))
+        if age_days is not None and age_days > _IMPORT_STALE_DAYS:
+            lines.append(
+                f"- ⚠️ **保有構成の取り込みから{age_days}日経過しています。**"
+                " この間に売買していれば反映されていません。"
+                "（楽天証券 → 保有商品一覧（すべて） → CSVで保存 →"
+                " `python scripts/import_rakuten_csv.py`）"
+            )
+        else:
+            lines.append(
+                "- 株価は毎回自動取得。保有構成は売買時にCSVを取り込むまで固定されます。"
+            )
     elif source == "config":
         lines.append(
             "- ⚠️ **楽天RSSスナップショットが読めなかったため、設定ファイルの保有を使用しています。**"

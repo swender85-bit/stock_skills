@@ -22,6 +22,7 @@ from src.core.decision import (
     save_package,
     verify_package,
 )
+from src.core.decision.package import _resolve_base_dir
 from src.core.decision.review import luck_skill_stats, sealed_body_intact
 from src.core.temporal import compare_instants
 
@@ -275,3 +276,42 @@ class TestLuckSkillStats:
         pkg = build_package("7203.T", "buy", decided_at=DECIDED_AT)
         process_review(pkg)
         assert luck_skill_stats([pkg])["scored"] == 0
+
+
+class TestBaseDirResolution:
+    """保存先の解決順: 明示指定 > DECISION_PACKAGES_DIR > 既定。
+
+    テストが実データの data/decisions/ を汚していたことへの回帰テスト。
+    """
+
+    def test_explicit_arg_wins(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("DECISION_PACKAGES_DIR", str(tmp_path / "env"))
+        assert _resolve_base_dir(str(tmp_path / "explicit")) == str(tmp_path / "explicit")
+
+    def test_env_var_used_when_no_arg(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("DECISION_PACKAGES_DIR", str(tmp_path / "env"))
+        assert _resolve_base_dir() == str(tmp_path / "env")
+
+    def test_falls_back_to_default(self, monkeypatch):
+        monkeypatch.delenv("DECISION_PACKAGES_DIR", raising=False)
+        assert _resolve_base_dir() == "data/decisions"
+
+    def test_blank_env_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setenv("DECISION_PACKAGES_DIR", "   ")
+        assert _resolve_base_dir() == "data/decisions"
+
+    def test_save_and_load_roundtrip_via_env(self, monkeypatch, tmp_path):
+        target = tmp_path / "pkgs"
+        monkeypatch.setenv("DECISION_PACKAGES_DIR", str(target))
+        pkg = build_package("7203.T", "buy", decided_at=DECIDED_AT)
+        path = save_package(pkg)
+
+        assert path.parent == target
+        assert load_package(pkg["id"])["id"] == pkg["id"]
+        assert [p["id"] for p in list_packages()] == [pkg["id"]]
+
+    def test_env_redirect_keeps_default_dir_untouched(self, monkeypatch, tmp_path):
+        """環境変数を向けた先にだけ書き、既定ディレクトリには触れない。"""
+        monkeypatch.setenv("DECISION_PACKAGES_DIR", str(tmp_path / "pkgs"))
+        save_package(build_package("AAPL", "buy", decided_at=DECIDED_AT))
+        assert list((tmp_path / "pkgs").glob("dp_*.json"))

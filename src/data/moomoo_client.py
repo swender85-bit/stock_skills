@@ -128,16 +128,21 @@ def _opend_reachable() -> bool:
 
 
 def is_available() -> bool:
-    """有効化済み + SDK あり + OpenD 到達可能 のときだけ True。"""
+    """有効化済み + OpenD 到達可能 + SDK あり のときだけ True。
+
+    判定順は**コストの安い順**。SDK の import は実測 1.2 秒かかるので、
+    OpenD が起動していないときにその代金を払わないよう、到達確認
+    （1秒タイムアウト・60秒キャッシュ）を先に済ませる。
+    """
     if not is_enabled():
         _record("disabled", "MOOMOO_ENABLED 未設定（既定で無効）")
-        return False
-    if _import_sdk() is None:
-        _record("no_sdk", "moomoo-api / futu-api が未インストール")
         return False
     if not _opend_reachable():
         host, port = _get_endpoint()
         _record("opend_unreachable", f"OpenD ({host}:{port}) に接続できません")
+        return False
+    if _import_sdk() is None:
+        _record("no_sdk", "moomoo-api / futu-api が未インストール")
         return False
     _record("ok")
     return True
@@ -157,7 +162,13 @@ _SUFFIX_TO_MARKET = {
     ".SI": "SG",
 }
 
-# 指数は moomoo 側のコード体系が別なので明示マップ
+# 指数は moomoo 側のコード体系が別なので明示マップ。
+#
+# ⚠️ このマップは **実 OpenD 接続での検証ができていない**（OpenD デスクトップアプリの
+# 起動が必要なため）。株式コードの変換規則と SDK の API 形状（RET_OK / カラム名 /
+# OpenQuoteContext のシグネチャ）は moomoo-api 10.9 に対して検証済みだが、
+# 指数コードそのものが正しいかは未確認。誤っていれば該当指数が取れないだけで
+# （空が返る）、yahoo の一次ソースには影響しない。
 _INDEX_MAP = {
     "^GSPC": "US.SPX",
     "^NDX": "US.NDX",

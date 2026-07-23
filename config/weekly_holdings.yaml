@@ -1,117 +1,112 @@
 # 週次レポート用の保有銘柄定義
 #
-# 出典: 楽天証券「保有商品詳細」スクリーンショット実値
-#   - 初版: 2026/6/13（CLAUDE.md 基準スナップショット）
-#   - 更新: 2026/7/23 — MDT/QCOM 新規、FANG+ 積立増、USD現金をほぼ投入
-# CLAUDE.md の基準スナップショットは改変しない。ここはその機械可読な写しであり、
-# 数量・取得単価が変わったときだけ更新する（週次の株価は毎回 API で取り直す）。
+# ⚠️ このファイルは scripts/import_rakuten_csv.py が自動生成する。
+#    手で直してもよいが、次の取り込みで上書きされる。
 #
-# 注意: 保有構成は自動取得できない（楽天への自動ログインは実装しない方針）。
-# 売買したらこのファイルを更新するか、MS2 RSS スナップショットを設定すること。
-# 設定手順は config/rakuten.yaml のコメント参照。
+# 出典: 楽天証券「保有商品一覧（すべて）」CSV
+#   assetbalance(all)_20260723_222831.csv
+#   取り込み日時: 2026-07-23T13:28:32+00:00
+#
+# ■ 何が自動で、何が手動か
+#   保有構成（銘柄・数量・取得単価） … このCSVを投げたときだけ更新
+#   日々の株価                       … レポート生成のたび yfinance が自動取得
+#
+#   つまり売買したときだけCSVを落とせばよい。価格のために毎日落とす必要はない。
+#
+# ■ CSVの取り方（1クリック）
+#   楽天証券にログイン → マイメニュー → 保有商品一覧（すべて） → CSVで保存
+#   落ちてきたら: python scripts/import_rakuten_csv.py
 #
 # quote_symbol: 株価取得に使うティッカー。null なら価格取得をスキップし、
 #               last_known_price を使う（投信など yfinance に無い銘柄）。
 
 base_currency: JPY
-
-# 為替の取得元。取得できない場合 fallback_rate を使う。
 fx:
-  usdjpy_symbol: "JPY=X"
-  fallback_rate: 163.67   # 2026/7/23 楽天表示値
-
+  usdjpy_symbol: JPY=X
+  fallback_rate: 163.67
 holdings:
-  - name: "SOXL (半導体3x)"
-    quote_symbol: "SOXL"
-    account: "特定"
-    shares: 275
-    cost_price: 29.7495
-    currency: USD
-    category: "米国レバレッジETF"
-    leverage: 3
-
-  - name: "TECL (テック3x)"
-    quote_symbol: "TECL"
-    account: "特定"
-    shares: 154
-    cost_price: 105.3282
-    currency: USD
-    category: "米国レバレッジETF"
-    leverage: 3
-
-  - name: "TQQQ (ナス100 3x)"
-    quote_symbol: "TQQQ"
-    account: "特定"
-    shares: 214
-    cost_price: 26.8726
-    currency: USD
-    category: "米国レバレッジETF"
-    leverage: 3
-
-  # 2026/7/23 新規。USD現金(INTC弾)を投入して取得した1倍株の防御枠。
-  - name: "メドトロニック"
-    quote_symbol: "MDT"
-    account: "特定"
-    shares: 100
-    cost_price: 79.3200
-    currency: USD
-    category: "米国・医療機器"
-
-  - name: "クアルコム"
-    quote_symbol: "QCOM"
-    account: "特定"
-    shares: 85
-    cost_price: 186.2588
-    currency: USD
-    category: "米国・半導体"
-
-  - name: "味の素"
-    quote_symbol: "2802.T"
-    account: "特定"
-    shares: 400
-    cost_price: 3906.03
-    currency: JPY
-    category: "日本・食品"
-
-  - name: "味の素"
-    quote_symbol: "2802.T"
-    account: "NISA成長"
-    shares: 39
-    cost_price: 4813.00
-    currency: JPY
-    category: "日本・食品"
-
-  - name: "ニトリHD"
-    quote_symbol: "9843.T"
-    account: "特定"
-    shares: 345
-    cost_price: 3477.00
-    currency: JPY
-    category: "日本・小売"
-
-  - name: "トーメンデバイス"
-    quote_symbol: "2737.T"
-    account: "特定"
-    shares: 40
-    cost_price: 14230.00
-    currency: JPY
-    category: "日本・半導体商社"
-
-  # 投信は yfinance にティッカーが無いため価格取得をスキップする。
-  # 単位は「口」。基準価額は 10,000口 あたりの円。
-  - name: "iFreeNEXT FANG+"
-    quote_symbol: null
-    account: "NISAつみたて"
-    shares: 149927
-    unit_divisor: 10000
-    cost_price: 73369.04
-    last_known_price: 94864
-    currency: JPY
-    category: "米国グロース投信"
-    note: "¥5万/月の積立(DCA)継続中。壊れない1倍の保険コア、非売却。"
-
+- name: トーメンデバイス
+  quote_symbol: 2737.T
+  account: 特定
+  shares: 40
+  cost_price: 14230.0
+  currency: JPY
+  category: 日本・半導体商社
+- name: 味の素
+  quote_symbol: 2802.T
+  account: 特定
+  shares: 400
+  cost_price: 3906.03
+  currency: JPY
+  category: 日本・食品
+- name: 味の素
+  quote_symbol: 2802.T
+  account: NISA成長
+  shares: 39
+  cost_price: 4813.0
+  currency: JPY
+  category: 日本・食品
+- name: ニトリホールディングス
+  quote_symbol: 9843.T
+  account: 特定
+  shares: 345
+  cost_price: 3477.0
+  currency: JPY
+  category: 日本・小売
+- name: Direxion デイリー 半導体株 ブル 3倍 ETF
+  quote_symbol: SOXL
+  account: 特定
+  shares: 275
+  cost_price: 29.7495
+  currency: USD
+  leverage: 3
+  category: 米国レバレッジETF
+- name: Direxion デイリー テクノロジー株 ブル 3倍 ETF
+  quote_symbol: TECL
+  account: 特定
+  shares: 154
+  cost_price: 105.3282
+  currency: USD
+  leverage: 3
+  category: 米国レバレッジETF
+- name: メドトロニック
+  quote_symbol: MDT
+  account: 特定
+  shares: 100
+  cost_price: 79.32
+  currency: USD
+  category: 米国・医療機器
+- name: クアルコム
+  quote_symbol: QCOM
+  account: 特定
+  shares: 85
+  cost_price: 186.2588
+  currency: USD
+  category: 米国・半導体
+- name: プロシェアーズ・ウルトラプロQQQ
+  quote_symbol: TQQQ
+  account: 特定
+  shares: 214
+  cost_price: 26.8726
+  currency: USD
+  leverage: 3
+  category: 米国レバレッジETF
+- name: iFreeNEXT FANG+インデックス
+  quote_symbol: null
+  account: NISAつみたて
+  shares: 149927
+  cost_price: 73369.04
+  currency: JPY
+  unit_divisor: 10000
+  category: 米国グロース投信
+  note: ¥5万/月の積立(DCA)継続中。壊れない1倍の保険コア、非売却。
+  last_known_price: 94864
 cash:
-  - name: "米ドル現金"
-    amount: 63.07
-    currency: USD
-    note: "2026/7/23時点でほぼ残高なし。INTC弾は MDT/QCOM 取得に投入済み。"
+- name: 米ドル
+  amount: 63.07
+  currency: USD
+  note: 2026/7/23時点でほぼ残高なし。INTC弾は MDT/QCOM 取得に投入済み。
+source:
+  type: rakuten_csv
+  file: assetbalance(all)_20260723_222831.csv
+  exported_at: '2026-07-23T13:28:32+00:00'

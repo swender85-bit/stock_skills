@@ -39,11 +39,31 @@ schtasks /Run /TN "StockSkills\WeeklyReport"   # 即時実行
 優先順位:
 
 1. **楽天 MS2 RSS スナップショット**（`config/rakuten.yaml` の `snapshot_path`）
-2. `config/weekly_holdings.yaml`（CLAUDE.md 基準スナップショットの写し）
+2. `config/weekly_holdings.yaml` — **推奨は楽天の保有商品一覧CSVから取り込む**
 
-MS2 RSS は国内株が主対象。米国株の現在値が取れない場合は、**数量・取得単価だけ
-楽天を正とし、株価は yfinance で補完する**。レポートの `price_source` 列に
-どちらから来た値かが必ず出る。
+### 推奨: 保有商品一覧CSVの取り込み
+
+楽天証券Web → マイメニュー → 保有商品一覧（すべて） → CSVで保存 →
+
+```bash
+python scripts/import_rakuten_csv.py            # Downloads の最新を自動検出
+python scripts/import_rakuten_csv.py --dry-run  # 差分だけ確認
+```
+
+**MS2 RSS より優先してこちらを使う理由:** `RssPositionList` は楽天公式ヘルプ上
+**国内株式のみ**が対象で、外国株式・投資信託用の関数は提供されていない。
+このPFは評価額の約8割が米国株と投信なので、RSS では本体をカバーできない。
+CSVなら国内株・米国株・投信・外貨預り金・為替が1ファイルに揃い、
+Excel も常駐アプリも要らない。
+
+**構成と価格の分離:** CSVを取り込むのは**保有構成が変わったときだけ**でよい。
+日々の株価はレポート生成のたび yfinance が取り直す。取り込みから30日を超えると
+レポート冒頭に「この間に売買していれば反映されていません」と警告が出る。
+
+MS2 RSS を使う場合、国内株の現在値は RssMarket で引けるが米国株は取れない。
+その場合**数量・取得単価だけ楽天を正とし、株価は yfinance で補完する**。
+レポートの `price_source` 列にどちらから来た値かが必ず出る。
+テンプレートは `python scripts/make_rakuten_template.py` で生成できる。
 
 RSS が読めなかった場合、レポート冒頭に「実口座で売買した分は反映されていません」
 という警告が出る。この警告が出ていたら数字を信用しすぎないこと。

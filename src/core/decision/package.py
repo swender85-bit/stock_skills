@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
@@ -34,8 +35,20 @@ _PACKAGES_DIR = "data/decisions"
 KNOWABLE_KINDS = ("used", "available_unused", "unknowable")
 
 
-def _packages_dir(base_dir: str = _PACKAGES_DIR) -> Path:
-    d = Path(base_dir)
+def _resolve_base_dir(base_dir: Optional[str] = None) -> str:
+    """保存先を解決する。明示指定 > 環境変数 > 既定。
+
+    ``DECISION_PACKAGES_DIR`` で差し替えられるのは、テストが実データの
+    ``data/decisions/`` を汚さないようにするため（実際に統合テストの
+    売買がマスターへ書き込んでいた）。
+    """
+    if base_dir:
+        return base_dir
+    return os.environ.get("DECISION_PACKAGES_DIR", "").strip() or _PACKAGES_DIR
+
+
+def _packages_dir(base_dir: Optional[str] = None) -> Path:
+    d = Path(_resolve_base_dir(base_dir))
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -211,7 +224,7 @@ def build_package(
     return package
 
 
-def save_package(package: dict, base_dir: str = _PACKAGES_DIR) -> Path:
+def save_package(package: dict, base_dir: Optional[str] = None) -> Path:
     """パッケージをJSONで永続化する。JSONがmaster、Neo4jはview。"""
     path = _packages_dir(base_dir) / f"{package['id']}.json"
     path.write_text(
@@ -220,19 +233,19 @@ def save_package(package: dict, base_dir: str = _PACKAGES_DIR) -> Path:
     return path
 
 
-def load_package(package_id: str, base_dir: str = _PACKAGES_DIR) -> Optional[dict]:
+def load_package(package_id: str, base_dir: Optional[str] = None) -> Optional[dict]:
     """IDでパッケージを読み込む。存在しなければ None。"""
-    path = Path(base_dir) / f"{package_id}.json"
+    path = Path(_resolve_base_dir(base_dir)) / f"{package_id}.json"
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def list_packages(
-    symbol: Optional[str] = None, base_dir: str = _PACKAGES_DIR
+    symbol: Optional[str] = None, base_dir: Optional[str] = None
 ) -> list[dict]:
     """保存済みパッケージを新しい順に返す。symbol 指定で絞り込む。"""
-    d = Path(base_dir)
+    d = Path(_resolve_base_dir(base_dir))
     if not d.exists():
         return []
     packages: list[dict] = []

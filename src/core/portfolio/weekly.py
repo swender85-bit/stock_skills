@@ -333,6 +333,8 @@ def build_report_data(
     return {
         "generated_at": datetime.now(timezone.utc),
         "holdings_source": source,
+        # 保有構成の取り込み元（楽天CSVなど）。レポートの警告文の分岐に使う。
+        "holdings_import": config.get("source") or {},
         "positions": positions,
         "rss_snapshot": rss_snapshot,
         "fx_rate": fx_rate,

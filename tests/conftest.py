@@ -102,6 +102,21 @@ def mock_yahoo_client(monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
+def _redirect_data_writes(tmp_path_factory, monkeypatch):
+    """Redirect writes that would otherwise land in the real data/ masters.
+
+    This runs for *every* test, including ``no_auto_mock`` ones — an escaped
+    write pollutes the repo regardless of what the test is exercising.
+    The integration buy/sell tests were writing decision packages into the
+    real ``data/decisions/`` on every run.
+    """
+    monkeypatch.setenv(
+        "DECISION_PACKAGES_DIR",
+        str(tmp_path_factory.mktemp("decisions")),
+    )
+
+
+@pytest.fixture(autouse=True)
 def _block_external_io(request, monkeypatch):
     """Block Neo4j / TEI / Grok I/O in all tests.
 

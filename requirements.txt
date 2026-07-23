@@ -5,3 +5,5 @@ python-dotenv>=1.0.0
 pytest>=7.0
 networkx>=3.0
 neo4j>=5.0        # 任意: ナレッジグラフ（docker compose の neo4j 使用時）。未導入なら graceful degradation
+moomoo-api>=10.9  # 任意: 指数クオートの補完。別途 OpenD 起動 + MOOMOO_ENABLED=on が必要。未導入なら graceful degradation
+openpyxl>=3.1     # 楽天 MS2 RSS スナップショット(xlsx)の読み書き。未導入だと RSS 連携が使えない
