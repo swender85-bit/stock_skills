@@ -131,6 +131,32 @@ def print_context(user_input: str) -> Optional[str]:
         return None
 
 
+def print_portfolio_news_watch(symbols: Optional[list[str]] = None) -> None:
+    """保有銘柄＋主要指数の直近ニュースを分析時に自動表示する。
+
+    Finnhub（米国株・マーケット）＋yahoo（指数・日本株）を集約。
+    キー未設定・Neo4j有無に関わらず動く。全例外を握り潰し、
+    10秒でタイムアウトする（graceful degradation）。
+
+    Args:
+        symbols: 監視対象の銘柄。None なら保有銘柄を自動取得。
+    """
+    try:
+        from src.core.research.portfolio_news import (
+            build_news_watch,
+            format_news_watch,
+        )
+
+        with _timeout_guard(_CONTEXT_TIMEOUT):
+            data = build_news_watch(symbols=symbols)
+
+        output = format_news_watch(data)
+        if output:
+            print(output)
+    except Exception:
+        pass  # graceful degradation
+
+
 def print_removal_contexts(symbols: list[str]) -> None:
     """Print graph context for removal candidate symbols (KIK-470).
 

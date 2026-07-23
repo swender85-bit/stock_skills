@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
-from scripts.common import try_import, HAS_HISTORY_STORE, HAS_GRAPH_QUERY as _HAS_GQ, HAS_GRAPH_STORE as _HAS_GS, print_context, print_suggestions
+from scripts.common import try_import, HAS_HISTORY_STORE, HAS_GRAPH_QUERY as _HAS_GQ, HAS_GRAPH_STORE as _HAS_GS, print_context, print_suggestions, print_portfolio_news_watch
 from src.data.yahoo_client import get_stock_info, get_stock_detail
 from src.core.screening.indicators import calculate_value_score
 from src.core.common import is_etf
@@ -133,6 +133,9 @@ def main():
 
     # Context retrieval (KIK-465)
     print_context(f"report {symbol}")
+
+    # 保有＋指数ニュース監視（Finnhub/moomoo/yahoo 集約）
+    print_portfolio_news_watch([symbol])
 
     data = get_stock_detail(symbol)
     if data is None:

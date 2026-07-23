@@ -487,6 +487,17 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `find_big_misses(summary: dict, threshold_pct: float=-0.2, min_days: int=90) -> list[dict]` — 雋ｷ縺�蛻､譁ｭ縺縺｣縺溘�ｮ縺ｫ螟ｧ縺阪￥荳玖誠縺励◆縲悟ｭｦ縺ｶ縺ｹ縺榊､悶＠縲阪ｒ謚ｽ蜃ｺ縺吶ｋ縲�
 - `render_markdown(summary: dict, misses: Optional[list[dict]]=None) -> str` — OUTCOMES.md 逕ｨ縺ｮ Markdown 繧堤函謌舌☆繧九�
 
+### src.core.research.portfolio_news
+
+菫晄怏驫俶氛繝ｻ荳ｻ隕∵欠謨ｰ縺ｮ繝九Η繝ｼ繧ｹ逶｣隕悶い繧ｰ繝ｪ繧ｲ繝ｼ繧ｿ繝ｼ縲�
+
+- `get_portfolio_symbols() -> list[str]` — 菫晄怏驫俶氛縺ｮ繝�繧｣繝�繧ｫ繝ｼ繧貞叙蠕励�
+- `gather_holding_news(symbols: list[str], per_symbol: int=3) -> dict[str, list[dict]]` — 蜷�菫晄怏驫俶氛縺ｮ逶ｴ霑代ル繝･繝ｼ繧ｹ繧貞叙蠕励�
+- `gather_market_news(limit: int=4) -> list[dict]` — 繝槭�ｼ繧ｱ繝�繝亥�ｨ菴薙�ｮ繝九Η繝ｼ繧ｹ�ｼ�Finnhub general�ｼ峨�
+- `gather_index_watch(indices: Optional[list[dict]]=None) -> list[dict]` — 荳ｻ隕∵欠謨ｰ縺ｮ迴ｾ蝨ｨ豌ｴ貅悶→鬨ｰ關ｽ邇�繧貞叙蠕暦ｼ�yahoo�ｼ峨�
+- `build_news_watch(symbols: Optional[list[str]]=None, indices: Optional[list[dict]]=None, per_symbol: int=3) -> dict` — 菫晄怏�ｼ区欠謨ｰ縺ｮ繝九Η繝ｼ繧ｹ逶｣隕悶ョ繝ｼ繧ｿ繧剃ｸ諡ｬ讒狗ｯ峨�
+- `format_news_watch(data: dict, max_symbols: int=8) -> str` — news_watch 繝�繝ｼ繧ｿ繧� Markdown 縺ｫ謨ｴ蠖｢縲らｩｺ縺ｪ繧臥ｩｺ譁�蟄怜�励�
+
 ### src.core.research.researcher
 
 Deep research orchestration for stocks, industries, and markets (KIK-367).
@@ -829,6 +840,18 @@ TEI (Text Embeddings Inference) REST API client (KIK-420).
 - `is_available() -> bool` — Check if TEI service is reachable (result cached for 30s).
 - `get_embedding(text: str) -> list[float] | None` — Get embedding vector from TEI. Returns None on failure.
 - `reset_cache()` — Reset availability cache (for testing).
+
+### src.data.finnhub_client
+
+Finnhub API wrapper for portfolio & index news monitoring.
+
+- `get_error_status() -> dict` — 迴ｾ蝨ｨ縺ｮ Finnhub API 繧ｨ繝ｩ繝ｼ迥ｶ諷九ｒ霑斐☆縲�
+- `reset_error_state() -> None` — 繧ｨ繝ｩ繝ｼ迥ｶ諷九ｒ 'ok' 縺ｫ謌ｻ縺吶�
+- `reset_cache() -> None` — 繝励Ο繧ｻ繧ｹ蜀�繧ｭ繝｣繝�繧ｷ繝･繧偵け繝ｪ繧｢�ｼ井ｸｻ縺ｫ繝�繧ｹ繝育畑�ｼ峨�
+- `is_available() -> bool` — API 繧ｭ繝ｼ縺瑚ｨｭ螳壹＆繧後※縺�繧後�ｰ True縲�
+- `get_company_news(symbol: str, days: int=7, limit: int=5) -> list[dict]` — 蛟句挨驫俶氛縺ｮ逶ｴ霑代ル繝･繝ｼ繧ｹ繧貞叙蠕暦ｼ域眠縺励＞鬆��ｼ峨�
+- `get_market_news(category: str='general', limit: int=5) -> list[dict]` — 繝槭�ｼ繧ｱ繝�繝亥�ｨ菴薙�ｮ繝九Η繝ｼ繧ｹ繧貞叙蠕励�
+- `get_quote(symbol: str) -> Optional[dict]` — 謖�謨ｰ繝ｻ驫俶氛縺ｮ迴ｾ蝨ｨ蛟､繧ｯ繧ｪ繝ｼ繝医ｒ蜿門ｾ暦ｼ域欠謨ｰ逶｣隕也畑�ｼ峨�
 
 ### src.data.graph_query._common
 

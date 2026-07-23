@@ -26,7 +26,7 @@ SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from scripts.common import print_context, print_removal_contexts, print_suggestions
+from scripts.common import print_context, print_removal_contexts, print_suggestions, print_portfolio_news_watch
 
 # ---------------------------------------------------------------------------
 # Import subcommand functions from portfolio_commands
@@ -309,6 +309,14 @@ def main():
 
     # Context retrieval (KIK-465)
     print_context(f"portfolio {args.command}")
+
+    # 保有＋指数ニュース監視（分析系サブコマンドのみ）
+    _ANALYSIS_CMDS = {
+        "snapshot", "analyze", "health", "forecast",
+        "rebalance", "simulate", "adjust", "review", "what-if",
+    }
+    if args.command in _ANALYSIS_CMDS:
+        print_portfolio_news_watch()
 
     csv_path = os.path.normpath(args.csv)
 

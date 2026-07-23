@@ -7,7 +7,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
-from scripts.common import try_import, HAS_HISTORY_STORE, HAS_GRAPH_QUERY as _HAS_GQ, print_context, print_suggestions
+from scripts.common import try_import, HAS_HISTORY_STORE, HAS_GRAPH_QUERY as _HAS_GQ, print_context, print_suggestions, print_portfolio_news_watch
 from src.data import yahoo_client
 
 HAS_RESEARCHER, _res = try_import(
@@ -183,6 +183,9 @@ def main():
     # Context retrieval (KIK-465)
     _target = getattr(args, "symbol", None) or getattr(args, "theme", None) or getattr(args, "market", None) or ""
     print_context(f"research {args.command} {_target}")
+
+    # 保有＋指数ニュース監視（Finnhub/moomoo/yahoo 集約）
+    print_portfolio_news_watch()
 
     args.func(args)
 
