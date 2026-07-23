@@ -222,6 +222,22 @@ CONTEXT_RECENT_HOURS=168    # これ以内 → RECENT / これ超 → STALE
 - 10秒タイムアウト（SIGALRM）
 - Neo4j 未接続・エラー時は graceful degradation（出力なし、クラッシュしない）
 
+## 保有＋指数ニュース監視（自動）
+
+分析系スキル実行時、`print_portfolio_news_watch()` が保有銘柄と主要指数の
+直近ニュース・指数水準を自動取得して表示する。手動で呼ぶ必要はない。
+
+- 配線先: stock-report（銘柄指定時）/ market-research / stock-portfolio の
+  分析系サブコマンド（snapshot/analyze/health/forecast/rebalance/simulate/adjust/review/what-if）
+- ソース: **米国株=Finnhub / 日本株・指数=yahoo**（Finnhub フリー枠は指数クオート・
+  日本株ニュース非対応と実測で判明したため層分けした）
+- 指数が yahoo で取れない場合のみ moomoo(OpenD) で補完。`MOOMOO_ENABLED=on` の opt-in
+- `FINNHUB_API_KEY` 未設定・ネットワーク失敗時は表示なし（graceful degradation）
+
+**使い方**: ニュースは数値の背景説明として扱う。株価の変動とニュースの内容が
+食い違う場合は「まだ織り込まれていない」可能性を指摘する。ニュースが1件も取れない
+ことは「材料なし」ではなく**「取得できなかった」**として扱う。
+
 ### CLI ラッパー（手動実行用）
 
 ```bash

@@ -1,8 +1,14 @@
 # 週次レポート用の保有銘柄定義
 #
-# 出典: CLAUDE.md 「投資ポートフォリオ」基準スナップショット (2026/6/13 楽天証券実値)
+# 出典: 楽天証券「保有商品詳細」スクリーンショット実値
+#   - 初版: 2026/6/13（CLAUDE.md 基準スナップショット）
+#   - 更新: 2026/7/23 — MDT/QCOM 新規、FANG+ 積立増、USD現金をほぼ投入
 # CLAUDE.md の基準スナップショットは改変しない。ここはその機械可読な写しであり、
 # 数量・取得単価が変わったときだけ更新する（週次の株価は毎回 API で取り直す）。
+#
+# 注意: 保有構成は自動取得できない（楽天への自動ログインは実装しない方針）。
+# 売買したらこのファイルを更新するか、MS2 RSS スナップショットを設定すること。
+# 設定手順は config/rakuten.yaml のコメント参照。
 #
 # quote_symbol: 株価取得に使うティッカー。null なら価格取得をスキップし、
 #               last_known_price を使う（投信など yfinance に無い銘柄）。
@@ -12,7 +18,7 @@ base_currency: JPY
 # 為替の取得元。取得できない場合 fallback_rate を使う。
 fx:
   usdjpy_symbol: "JPY=X"
-  fallback_rate: 160.23   # 2026/6/13 基準
+  fallback_rate: 163.67   # 2026/7/23 楽天表示値
 
 holdings:
   - name: "SOXL (半導体3x)"
@@ -41,6 +47,23 @@ holdings:
     currency: USD
     category: "米国レバレッジETF"
     leverage: 3
+
+  # 2026/7/23 新規。USD現金(INTC弾)を投入して取得した1倍株の防御枠。
+  - name: "メドトロニック"
+    quote_symbol: "MDT"
+    account: "特定"
+    shares: 100
+    cost_price: 79.3200
+    currency: USD
+    category: "米国・医療機器"
+
+  - name: "クアルコム"
+    quote_symbol: "QCOM"
+    account: "特定"
+    shares: 85
+    cost_price: 186.2588
+    currency: USD
+    category: "米国・半導体"
 
   - name: "味の素"
     quote_symbol: "2802.T"
@@ -79,16 +102,16 @@ holdings:
   - name: "iFreeNEXT FANG+"
     quote_symbol: null
     account: "NISAつみたて"
-    shares: 144592
+    shares: 149927
     unit_divisor: 10000
-    cost_price: 72618.13
-    last_known_price: 91955
+    cost_price: 73369.04
+    last_known_price: 94864
     currency: JPY
     category: "米国グロース投信"
     note: "¥5万/月の積立(DCA)継続中。壊れない1倍の保険コア、非売却。"
 
 cash:
-  - name: "米ドル現金(INTC弾)"
-    amount: 23776.76
+  - name: "米ドル現金"
+    amount: 63.07
     currency: USD
-    note: "逆回転の大底用に温存。FOMC等の関門通過後に1/3ずつ分割投入。"
+    note: "2026/7/23時点でほぼ残高なし。INTC弾は MDT/QCOM 取得に投入済み。"

@@ -64,6 +64,13 @@ def test_allow_edit_source():
     assert code == 0
 
 
+def test_allow_edit_test_under_tests_data():
+    # tests/data/ はテストコードであってデータマスターではない
+    code = _run({"tool_name": "Edit", "tool_input": {
+        "file_path": "tests/data/test_finnhub_client.py"}})
+    assert code == 0
+
+
 def test_allow_new_env_write():
     # まだ存在しない .env への Write は新規作成扱いで許可（追記型運用）
     code = _run({"tool_name": "Write", "tool_input": {

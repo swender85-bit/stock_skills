@@ -52,7 +52,7 @@ pip install -r requirements.txt
 ```
 Skills (.claude/skills/*/SKILL.md → scripts/*.py) — 9スキル
 Core   (src/core/) — decision/, health/, policy/, portfolio/, ports/, research/, risk/, screening/, action_item_bridge, action_item_detector, common, health_check, health_etf, health_labels, lesson_gate, market_dashboard, models, proactive_engine, provenance, return_estimate, technicals, temporal, ticker_utils, value_trap
-Data   (src/data/) — context/, graph_query/, graph_store/, grok_client/, history/, yahoo_client/, embedding_client, finnhub_client, lesson_community, lesson_conflict, linear_client, note_manager, question_log, rakuten_rss, user_profile
+Data   (src/data/) — context/, graph_query/, graph_store/, grok_client/, history/, yahoo_client/, embedding_client, finnhub_client, lesson_community, lesson_conflict, linear_client, moomoo_client, note_manager, question_log, rakuten_rss, user_profile
 Output (src/output/) — adjust_formatter, analyze_formatter, fable5_formatter, forecast_formatter, formatter, health_formatter, portfolio_formatter, rebalance_formatter, research_formatter, review_formatter, screening_summary_formatter, simulate_formatter, stress_formatter, sync, verify, weekly_formatter
 
 Config: config/screening_presets.yaml (16 presets), config/exchanges.yaml (60+ regions)
@@ -128,3 +128,30 @@ python scripts/save_report.py --name "7203T_分析_YYYYMMDD.md" --stdin < report
 
 ### 株価更新ログ
 （更新時はここに「YYYY/MM/DD: 銘柄 旧値→新値、再計算した評価額・損益・比率」を追記。基準スナップショットは改変しない）
+
+#### 2026/7/23（楽天証券「保有商品詳細」スクショ実値 / 為替 ¥163.67/USD）
+
+**構成変更あり。** USD現金(INTC弾) $23,776.76 → **$63.07**。差分で 1倍株を2銘柄新規取得した。
+
+| 銘柄 | 変更 | 取得単価 | 現在値 | 評価額(¥) | 損益(¥) |
+|---|---|---|---|---|---|
+| MDT メドトロニック | **新規** 100株 特定 | $79.3200 | $81.89 | 1,340,293 | +48,806 |
+| QCOM クアルコム | **新規** 85株 特定 | $186.2588 | $175.63 | 2,443,355 | -126,969 |
+| iFreeNEXT FANG+ | 144,592口 → **149,927口**（DCA継続） | ¥73,369.04 | ¥94,864 | 1,422,267 | +322,267 |
+
+株価（数量は不変）:
+
+| 銘柄 | 6/13 | 7/23 | 評価額(¥) | 損益(¥) |
+|---|---|---|---|---|
+| SOXL 275株 | $234.68 | **$160.99** | 7,246,039 | +6,062,259 |
+| TECL 154株 | $215.49 | **$191.29** | 4,821,498 | +2,329,881 |
+| TQQQ 214株 | $77.52 | **$70.28** | 2,461,583 | +1,626,127 |
+| 味の素 特定 400株 | ¥5,158 | **¥5,102** | 2,040,800 | +478,385 |
+| 味の素 NISA 39株 | ¥5,158 | **¥5,102** | 198,978 | +11,271 |
+| ニトリHD 345株 | ¥2,690.5 | **¥2,390** | 824,550 | -375,015 |
+| トーメンデバイス 40株 | ¥14,490 | **¥16,630** | 665,200 | +96,000 |
+
+**要点:** 3xスリーブは6/13比で大きく下落（SOXL -31%、TECL -11%、TQQQ -9%）したが、
+取得単価が低いため含み益は依然として大きい。「損切りなし・下落で積み増し」の運用ルール上、
+この下落自体は想定内。一方で **現金クッションがほぼ消滅**（$23,777 → $63）しており、
+さらに下落した際の積み増し余力は現時点でほぼ無い。

@@ -10,11 +10,12 @@
 | 米国株ニュース | Finnhub company-news | yahoo get_stock_news |
 | 日本株ニュース | yahoo get_stock_news | （Finnhubはフリー枠で日本株非対応） |
 | マーケット全体 | Finnhub market-news | — |
-| 指数水準 | yahoo get_stock_info | — |
-| （将来）気配・板 | moomoo OpenD | — |
+| 指数水準 | yahoo get_stock_info | moomoo OpenD |
 
 いずれのソースも未設定/失敗時は空を返す（graceful degradation）。
 Finnhub フリー枠は指数クオート・日本株ニュース非対応のため yahoo で補完する。
+moomoo は OpenD ゲートウェイ起動時のみ働く opt-in のフォールバック
+（`MOOMOO_ENABLED=on`）。詳細は `src/data/moomoo_client.py`。
 """
 
 from __future__ import annotations
@@ -132,7 +133,10 @@ def gather_market_news(limit: int = 4) -> list[dict]:
 
 
 def gather_index_watch(indices: Optional[list[dict]] = None) -> list[dict]:
-    """主要指数の現在水準と騰落率を取得（yahoo）。
+    """主要指数の現在水準と騰落率を取得。
+
+    一次ソースは yahoo。取れなかった指数だけ moomoo(OpenD) で補完する
+    （moomoo は opt-in で、無効なら何も起きない）。
 
     返り値: [{label, symbol, price, percent_change}, ...]（取得失敗はスキップ）
     """
@@ -141,19 +145,21 @@ def gather_index_watch(indices: Optional[list[dict]] = None) -> list[dict]:
     try:
         from src.data import yahoo_client as yc
     except Exception:
-        return []
+        yc = None
 
     out: list[dict] = []
+    missing: list[dict] = []
     for idx in indices:
         sym = idx.get("symbol", "")
-        try:
-            info = yc.get_stock_info(sym)
-        except Exception:
-            info = None
-        if not info:
-            continue
-        price = info.get("price") or info.get("current_price")
+        info = None
+        if yc is not None:
+            try:
+                info = yc.get_stock_info(sym)
+            except Exception:
+                info = None
+        price = info.get("price") or info.get("current_price") if info else None
         if price is None:
+            missing.append(idx)
             continue
         out.append(
             {
@@ -161,6 +167,35 @@ def gather_index_watch(indices: Optional[list[dict]] = None) -> list[dict]:
                 "symbol": sym,
                 "price": price,
                 "percent_change": _daily_change_pct(sym, yc),
+            }
+        )
+
+    out.extend(_moomoo_index_fallback(missing))
+    return out
+
+
+def _moomoo_index_fallback(indices: list[dict]) -> list[dict]:
+    """yahoo で取れなかった指数を moomoo で補完。無効時は空。"""
+    if not indices:
+        return []
+    try:
+        from src.data import moomoo_client as mc
+
+        quotes = mc.get_quotes([i.get("symbol", "") for i in indices])
+    except Exception:
+        return []
+
+    out: list[dict] = []
+    for idx in indices:
+        q = quotes.get(idx.get("symbol", ""))
+        if not q or q.get("current") is None:
+            continue
+        out.append(
+            {
+                "label": idx.get("label", idx.get("symbol", "")),
+                "symbol": idx.get("symbol", ""),
+                "price": q["current"],
+                "percent_change": q.get("percent_change"),
             }
         )
     return out

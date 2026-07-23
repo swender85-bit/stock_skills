@@ -45,15 +45,16 @@ def _abs(path: str) -> str:
 
 
 def _is_source_tree(path: str) -> bool:
-    """`src/` 配下はソースコードであってデータマスターではない。
+    """`src/` `tests/` 配下はコードであってデータマスターではない。
 
     PROTECTED_SUBSTRINGS は `/data/` `/history/` `/notes/` を部分一致で見るため、
-    素のままだと `src/data/history/...` のようなソースファイルまで保護対象に
-    誤判定してしまう（実際に src/data/context/*.py の編集がブロックされた）。
+    素のままだと `src/data/history/...` や `tests/data/test_*.py` のような
+    コードファイルまで保護対象に誤判定してしまう（実際に src/data/context/*.py と
+    tests/data/*.py の編集がブロックされた）。
     秘密鍵・.env はこの例外より優先されるので、ここでは扱わない。
     """
     parts = _abs(path).split(os.sep)
-    return "src" in parts
+    return "src" in parts or "tests" in parts
 
 
 def is_protected(path: str) -> bool:

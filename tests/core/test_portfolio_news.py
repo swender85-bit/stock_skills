@@ -196,6 +196,74 @@ class TestGatherIndexWatch:
         assert seen == [i["symbol"] for i in pn.DEFAULT_INDICES]
 
 
+class TestMoomooIndexFallback:
+    """yahoo で取れなかった指数だけ moomoo で補完する（moomoo は opt-in）。"""
+
+    @pytest.fixture(autouse=True)
+    def _disable_moomoo_by_default(self, monkeypatch):
+        from src.data import moomoo_client as mc
+
+        monkeypatch.setattr(mc, "get_quotes", lambda syms: {})
+
+    def test_no_missing_indices_skips_moomoo(self, monkeypatch):
+        from src.data import moomoo_client as mc
+
+        called = []
+        monkeypatch.setattr(mc, "get_quotes", lambda syms: called.append(syms) or {})
+        assert pn._moomoo_index_fallback([]) == []
+        assert called == []
+
+    def test_fills_missing_index(self, monkeypatch):
+        from src.data import moomoo_client as mc
+
+        monkeypatch.setattr(
+            mc, "get_quotes",
+            lambda syms: {"^N225": {"current": 39000.0, "percent_change": 0.8}},
+        )
+        out = pn._moomoo_index_fallback([{"label": "日経225", "symbol": "^N225"}])
+        assert out == [{"label": "日経225", "symbol": "^N225",
+                        "price": 39000.0, "percent_change": 0.8}]
+
+    def test_skips_index_without_price(self, monkeypatch):
+        from src.data import moomoo_client as mc
+
+        monkeypatch.setattr(mc, "get_quotes",
+                            lambda syms: {"^N225": {"current": None}})
+        assert pn._moomoo_index_fallback([{"label": "日経225", "symbol": "^N225"}]) == []
+
+    def test_moomoo_exception_is_swallowed(self, monkeypatch):
+        from src.data import moomoo_client as mc
+
+        def boom(syms):
+            raise RuntimeError("OpenD died")
+
+        monkeypatch.setattr(mc, "get_quotes", boom)
+        assert pn._moomoo_index_fallback([{"label": "X", "symbol": "^N225"}]) == []
+
+    def test_disabled_moomoo_yields_nothing(self):
+        """既定（無効）では補完なし = 従来どおりの挙動。"""
+        assert pn._moomoo_index_fallback([{"label": "X", "symbol": "^N225"}]) == []
+
+    def test_gather_index_watch_uses_fallback_only_for_missing(self, monkeypatch,
+                                                               fake_yahoo):
+        monkeypatch.setattr(
+            fake_yahoo, "get_stock_info",
+            lambda sym: {"price": 5000.0} if sym == "^GSPC" else None,
+        )
+        monkeypatch.setattr(pn, "_daily_change_pct", lambda sym, yc: 0.5)
+        seen = []
+        monkeypatch.setattr(
+            pn, "_moomoo_index_fallback",
+            lambda missing: seen.append([m["symbol"] for m in missing]) or [],
+        )
+        out = pn.gather_index_watch([
+            {"label": "S&P500", "symbol": "^GSPC"},
+            {"label": "日経225", "symbol": "^N225"},
+        ])
+        assert [o["symbol"] for o in out] == ["^GSPC"]
+        assert seen == [["^N225"]]  # yahoo で取れた分は moomoo に投げない
+
+
 class TestDailyChangePct:
     def _yc_with_closes(self, closes):
         import pandas as pd

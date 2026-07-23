@@ -494,7 +494,7 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `get_portfolio_symbols() -> list[str]` — 菫晄怏驫俶氛縺ｮ繝�繧｣繝�繧ｫ繝ｼ繧貞叙蠕励�
 - `gather_holding_news(symbols: list[str], per_symbol: int=3) -> dict[str, list[dict]]` — 蜷�菫晄怏驫俶氛縺ｮ逶ｴ霑代ル繝･繝ｼ繧ｹ繧貞叙蠕励�
 - `gather_market_news(limit: int=4) -> list[dict]` — 繝槭�ｼ繧ｱ繝�繝亥�ｨ菴薙�ｮ繝九Η繝ｼ繧ｹ�ｼ�Finnhub general�ｼ峨�
-- `gather_index_watch(indices: Optional[list[dict]]=None) -> list[dict]` — 荳ｻ隕∵欠謨ｰ縺ｮ迴ｾ蝨ｨ豌ｴ貅悶→鬨ｰ關ｽ邇�繧貞叙蠕暦ｼ�yahoo�ｼ峨�
+- `gather_index_watch(indices: Optional[list[dict]]=None) -> list[dict]` — 荳ｻ隕∵欠謨ｰ縺ｮ迴ｾ蝨ｨ豌ｴ貅悶→鬨ｰ關ｽ邇�繧貞叙蠕励�
 - `build_news_watch(symbols: Optional[list[str]]=None, indices: Optional[list[dict]]=None, per_symbol: int=3) -> dict` — 菫晄怏�ｼ区欠謨ｰ縺ｮ繝九Η繝ｼ繧ｹ逶｣隕悶ョ繝ｼ繧ｿ繧剃ｸ諡ｬ讒狗ｯ峨�
 - `format_news_watch(data: dict, max_symbols: int=8) -> str` — news_watch 繝�繝ｼ繧ｿ繧� Markdown 縺ｫ謨ｴ蠖｢縲らｩｺ縺ｪ繧臥ｩｺ譁�蟄怜�励�
 
@@ -1130,6 +1130,18 @@ Linear API client for action item management (KIK-472).
 - `create_issue(title: str, description: str='', priority: int=3, labels: list[str] | None=None) -> Optional[dict]` — Create a Linear issue via GraphQL mutation.
 - `find_issue_by_title(title_prefix: str) -> Optional[dict]` — Search for an existing issue by title prefix (dedup check).
 - `update_issue(issue_id: str, state: str | None=None) -> bool` — Update a Linear issue state.
+
+### src.data.moomoo_client
+
+moomoo (OpenD) client 窶� 豌鈴�阪�ｻ謖�謨ｰ繧ｯ繧ｪ繝ｼ繝医�ｮ陬懷ｮ後た繝ｼ繧ｹ縲�
+
+- `get_error_status() -> dict` — 迴ｾ蝨ｨ縺ｮ moomoo 謗･邯夂憾諷九ｒ霑斐☆縲�
+- `reset_state() -> None` — 迥ｶ諷九→蛻ｰ驕皮｢ｺ隱阪く繝｣繝�繧ｷ繝･繧偵Μ繧ｻ繝�繝茨ｼ井ｸｻ縺ｫ繝�繧ｹ繝育畑�ｼ峨�
+- `is_enabled() -> bool` — ``MOOMOO_ENABLED`` 縺ｧ譏守､ｺ逧�縺ｫ譛牙柑蛹悶＆繧後※縺�繧九°縲�
+- `is_available() -> bool` — 譛牙柑蛹匁ｸ医∩ + SDK 縺ゅｊ + OpenD 蛻ｰ驕泌庄閭ｽ 縺ｮ縺ｨ縺阪□縺� True縲�
+- `to_moomoo_symbol(symbol: str) -> Optional[str]` — yahoo 蠖｢蠑上�ｮ繝�繧｣繝�繧ｫ繝ｼ繧� moomoo 蠖｢蠑上↓螟画鋤縲ょ､画鋤荳崎�ｽ縺ｪ繧� None縲�
+- `get_quote(symbol: str) -> Optional[dict]` — 迴ｾ蝨ｨ蛟､繧ｯ繧ｪ繝ｼ繝医ｒ蜿門ｾ励ょ叙蠕嶺ｸ崎�ｽ縺ｪ繧� None縲�
+- `get_quotes(symbols: list[str]) -> dict[str, Optional[dict]]` — 隍�謨ｰ繧ｷ繝ｳ繝懊Ν縺ｮ繧ｯ繧ｪ繝ｼ繝医ｒ荳諡ｬ蜿門ｾ励�
 
 ### src.data.note_manager
 
