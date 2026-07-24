@@ -77,6 +77,40 @@ def load_snapshot(snapshot_path: str | None, max_age_hours: float) -> tuple[dict
         return None, messages
 
 
+def build_moomoo_section(config: dict) -> str:
+    """moomoo(OpenD) から週次インサイトを集めて markdown セクションを返す。
+
+    無人実行のため、OpenD が起動していなければ ensure_opend が自動起動→終了する。
+    無効化・未起動・SDK無し・例外時は空文字（レポート本体には影響しない）。
+    """
+    try:
+        from src.data import moomoo_client
+        from src.core.research import moomoo_insights
+    except Exception:
+        return ""
+
+    symbols = [
+        h.get("quote_symbol")
+        for h in (config.get("holdings") or [])
+        if h.get("quote_symbol")
+    ]
+    if not symbols:
+        return ""
+
+    try:
+        with moomoo_client.ensure_opend() as up:
+            if not up:
+                status = moomoo_client.get_error_status()
+                print(f"[info] moomoo インサイトはスキップ: {status.get('message')}",
+                      file=sys.stderr)
+                return ""
+            data = moomoo_insights.collect_weekly_insights(symbols)
+            return moomoo_insights.format_weekly_section(data)
+    except Exception as e:
+        print(f"[info] moomoo インサイト取得に失敗: {e}", file=sys.stderr)
+        return ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="週次ポートフォリオ分析レポート")
     parser.add_argument("--snapshot", help="楽天RSSスナップショット(.xlsx/.csv)のパス")
@@ -120,6 +154,11 @@ def main() -> int:
     )
 
     report = format_weekly_report(data)
+
+    print("[info] moomoo インサイトを取得中...", file=sys.stderr)
+    moomoo_md = build_moomoo_section(config)
+    if moomoo_md:
+        report = f"{report.rstrip()}\n\n{moomoo_md}"
 
     if args.dry_run:
         print(report)

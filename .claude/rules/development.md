@@ -9,6 +9,7 @@
 - TEI ベクトル検索は `TEI_URL` 環境変数で制御（デフォルト: `http://localhost:8081`）。未起動時はベクトル検索スキップ (KIK-420)
 - コンテキスト鮮度閾値は `CONTEXT_FRESH_HOURS`（デフォルト: 24）/ `CONTEXT_RECENT_HOURS`（デフォルト: 168）で制御 (KIK-427)
 - Linear 連携は `LINEAR_ENABLED=on` で有効化（デフォルト: off）。`LINEAR_API_KEY`（APIトークン）、`LINEAR_TEAM_ID`（issue作成先チームID）、`LINEAR_PROJECT_ID`（任意、プロジェクトID）を設定 (KIK-472)
+- moomoo(OpenD) インサイトは `MOOMOO_ENABLED=on` で有効化（デフォルト: off / opt-in）。`MOOMOO_OPEND_HOST`（既定 `127.0.0.1`）、`MOOMOO_OPEND_PORT`（既定 `11111`）。無人週次では `ensure_opend()` が OpenD.exe を自動起動→取得→終了する: `MOOMOO_OPEND_PATH`（OpenD.exe のパス、未設定なら既定 Desktop パス）、`MOOMOO_OPEND_STARTUP_TIMEOUT`（ログイン=ポート開を待つ秒数、既定 90）。ヘッドレス自動ログインには `OpenD.xml` に本人の login_account + login_pwd_md5 が必要（`scripts/set_moomoo_login.py` で1回設定）。SDK未導入・OpenD未起動・未ログインでも空を返すだけ（graceful degradation）
 
 ## サブエージェントとモデル階層 (upgrade v1.0 Phase 5)
 
@@ -39,7 +40,7 @@
 
 ## テスト
 
-- `python3 -m pytest tests/ -q` で全テスト実行（約3862テスト、~20秒）
+- `python3 -m pytest tests/ -q` で全テスト実行（約3896テスト、~20秒）
 - `tests/conftest.py` に共通フィクスチャ: `stock_info_data`, `stock_detail_data`, `price_history_df`, `mock_yahoo_client`
 - `tests/conftest.py` に autouse `_block_external_io` フィクスチャ: Neo4j/TEI/Grok を全テストで自動モック（KIK-529）。`@pytest.mark.no_auto_mock` でオプトアウト可
 - `tests/fixtures/` に JSON/CSV テストデータ（Toyota 7203.T ベース）

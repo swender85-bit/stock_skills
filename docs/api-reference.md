@@ -1139,6 +1139,7 @@ moomoo (OpenD) client 窶� 豌鈴�阪�ｻ謖�謨ｰ繧ｯ繧ｪ繝ｼ繝
 - `reset_state() -> None` — 迥ｶ諷九→蛻ｰ驕皮｢ｺ隱阪く繝｣繝�繧ｷ繝･繧偵Μ繧ｻ繝�繝茨ｼ井ｸｻ縺ｫ繝�繧ｹ繝育畑�ｼ峨�
 - `is_enabled() -> bool` — ``MOOMOO_ENABLED`` 縺ｧ譏守､ｺ逧�縺ｫ譛牙柑蛹悶＆繧後※縺�繧九°縲�
 - `is_available() -> bool` — 譛牙柑蛹匁ｸ医∩ + OpenD 蛻ｰ驕泌庄閭ｽ + SDK 縺ゅｊ 縺ｮ縺ｨ縺阪□縺� True縲�
+- `ensure_opend(autostart: bool=True)` — OpenD 縺御ｽｿ縺医ｋ迥ｶ諷九ｒ菫晁ｨｼ縺吶ｋ繧ｳ繝ｳ繝�繧ｭ繧ｹ繝医�槭ロ繝ｼ繧ｸ繝｣縲�
 - `to_moomoo_symbol(symbol: str) -> Optional[str]` — yahoo 蠖｢蠑上�ｮ繝�繧｣繝�繧ｫ繝ｼ繧� moomoo 蠖｢蠑上↓螟画鋤縲ょ､画鋤荳崎�ｽ縺ｪ繧� None縲�
 - `get_quote(symbol: str) -> Optional[dict]` — 迴ｾ蝨ｨ蛟､繧ｯ繧ｪ繝ｼ繝医ｒ蜿門ｾ励ょ叙蠕嶺ｸ崎�ｽ縺ｪ繧� None縲�
 - `get_quotes(symbols: list[str]) -> dict[str, Optional[dict]]` — 隍�謨ｰ繧ｷ繝ｳ繝懊Ν縺ｮ繧ｯ繧ｪ繝ｼ繝医ｒ荳諡ｬ蜿門ｾ励�

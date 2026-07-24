@@ -25,6 +25,9 @@ REM 日本語・絵文字が cp932 で落ちないようにする
 set PYTHONIOENCODING=utf-8
 set PYTHONUTF8=1
 
+REM moomoo(OpenD) 無人インサイト取得を有効化
+set MOOMOO_ENABLED=on
+
 set REPO=C:\Users\swend\stock_skills
 set LOG=%REPO%\output\weekly_report.log
 

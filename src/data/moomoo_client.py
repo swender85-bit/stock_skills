@@ -34,7 +34,9 @@ from __future__ import annotations
 
 import os
 import socket
+import subprocess
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -46,6 +48,7 @@ _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 11111
 _PROBE_TIMEOUT = 1.0   # OpenD 到達確認の秒数（分析を止めないため短く）
 _PROBE_TTL = 60        # 到達確認結果のキャッシュ秒数
+_DEFAULT_STARTUP_TIMEOUT = 90.0  # 自動起動時にログイン完了（ポート開）を待つ上限秒
 
 # ---------------------------------------------------------------------------
 # 状態
@@ -146,6 +149,157 @@ def is_available() -> bool:
         return False
     _record("ok")
     return True
+
+
+# ---------------------------------------------------------------------------
+# 無人ライフサイクル: OpenD の自動起動→終了 (ensure_opend)
+# ---------------------------------------------------------------------------
+#
+# 週次レポートなどを **無人** で回すために、OpenD が起動していなければこの場で
+# 起動し、処理後に「自分が起動したものだけ」終了させる。既にユーザーが OpenD を
+# 開いている場合はそれを尊重し、勝手に落とさない。
+#
+# ヘッドレス自動ログインには OpenD.xml に本人の login_account + login_pwd_md5 が
+# 必要（`scripts/set_moomoo_login.py` で1回設定）。デバイス認証は GUI ログイン時に
+# 済んでいれば Device.dat に保存され、再ログイン時の SMS は不要になる。
+
+
+def _opend_exe_path() -> Optional[Path]:
+    """OpenD.exe のパス。``MOOMOO_OPEND_PATH`` 優先、無ければ既定 Desktop パス。"""
+    raw = os.environ.get("MOOMOO_OPEND_PATH", "").strip()
+    if raw:
+        p = Path(raw)
+        return p if p.is_file() else None
+    default = (
+        Path.home() / "Desktop" / "moomoo_OpenD_10.9.6918_Windows"
+        / "moomoo_OpenD_10.9.6918_Windows" / "OpenD.exe"
+    )
+    return default if default.is_file() else None
+
+
+def _wait_reachable(timeout: float) -> bool:
+    """ポートが listening になる（＝ログイン成功）まで待つ。"""
+    host, port = _get_endpoint()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1.0):
+                return True
+        except OSError:
+            time.sleep(2.0)
+    return False
+
+
+def _launch_opend(exe: Path):
+    """OpenD.exe を起動して Popen を返す。失敗時 None。"""
+    try:
+        creationflags = 0
+        if os.name == "nt":
+            # コンソールを開かず、親のシグナルから切り離す
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | \
+                getattr(subprocess, "DETACHED_PROCESS", 0)
+        return subprocess.Popen(
+            [str(exe)], cwd=str(exe.parent),
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL, creationflags=creationflags,
+        )
+    except Exception as e:
+        _record("other_error", f"OpenD 起動失敗: {type(e).__name__}: {e}")
+        return None
+
+
+def _terminate_opend(proc) -> None:
+    """自分で起動した OpenD をプロセスツリーごと終了する。"""
+    if proc is None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+            )
+        else:
+            proc.terminate()
+        proc.wait(timeout=15)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+@contextmanager
+def ensure_opend(autostart: bool = True):
+    """OpenD が使える状態を保証するコンテキストマネージャ。
+
+    yield する値は「この with ブロック内で OpenD が到達可能か」の bool。
+
+    - 既に到達可能 → そのまま利用（**終了させない**）
+    - 未到達 + ``autostart`` + 有効化済み + exe あり → 自動起動して待機、
+      ブロック終了時に**自分が起動したものだけ**終了させる
+    - 無効化 / exe 無し / 起動失敗 → ``False`` を yield（呼び出し側は graceful に）
+
+    ``autostart=False`` なら起動は試みず、現在の到達性だけを返す。
+    """
+    global _probe_cache
+
+    if not is_enabled():
+        _record("disabled", "MOOMOO_ENABLED 未設定（既定で無効）")
+        yield False
+        return
+
+    if _opend_reachable():
+        yield True  # ユーザーが開いている等。落とさない。
+        return
+
+    if not autostart:
+        yield False
+        return
+
+    exe = _opend_exe_path()
+    if exe is None:
+        _record("opend_unreachable",
+                 "OpenD 未起動で自動起動もできません（MOOMOO_OPEND_PATH 未設定/不在）")
+        yield False
+        return
+
+    proc = _launch_opend(exe)
+    if proc is None:
+        yield False
+        return
+
+    startup_timeout = _DEFAULT_STARTUP_TIMEOUT
+    raw = os.environ.get("MOOMOO_OPEND_STARTUP_TIMEOUT", "").strip()
+    if raw:
+        try:
+            startup_timeout = float(raw)
+        except ValueError:
+            pass
+
+    reachable = _wait_reachable(startup_timeout)
+    _probe_cache = None  # 起動したので到達性キャッシュを無効化
+    if reachable:
+        # コールドスタート直後は FedWatch/ARK/ニュース等の参照データが
+        # まだ同期されておらず空を返す。ポートが開いてから少し待って
+        # OpenD に同期の猶予を与える（自動起動時のみ）。
+        warmup = 12.0
+        raw_w = os.environ.get("MOOMOO_OPEND_WARMUP", "").strip()
+        if raw_w:
+            try:
+                warmup = float(raw_w)
+            except ValueError:
+                pass
+        if warmup > 0:
+            time.sleep(warmup)
+    try:
+        if not reachable:
+            _record("opend_unreachable",
+                     f"OpenD を起動したが {startup_timeout:.0f}s 以内にログインしませんでした"
+                     "（OpenD.xml の資格情報を確認）")
+        yield reachable
+    finally:
+        _terminate_opend(proc)
+        _probe_cache = None
 
 
 # ---------------------------------------------------------------------------

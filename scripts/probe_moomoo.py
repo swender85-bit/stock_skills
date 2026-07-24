@@ -19,6 +19,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+# Windows の cp932 コンソールでも絵文字/日本語を出せるように UTF-8 化
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
 US = "US.SOXL"
 JP = "JP.2802"
 
