@@ -1,0 +1,665 @@
+#!/usr/bin/env python3
+"""週次PF深掘りレポートの完全無人ヘッドレス駆動。
+
+## なぜ2層なのか
+
+従来の週次レポート（`weekly_report.py`）は Python の文字列整形で数字を並べるだけで、
+「材料 → 保有株への含意」をつなぐ解釈層が無かった。ここでは:
+
+    層1  ブリーフィングパック生成（Python・トークン0）… build_briefing_pack.py
+    層2  Claude synthesis（headless `claude -p`）……… .claude/prompts/weekly_deep.md
+
+の2層に分け、**執筆を節単位のチェックポイント**にする。1節=1回の `claude -p` 呼び出しで、
+書けた節はファイルに落として state.json に記録する。使用量上限に当たったら中断コード(2)で
+落ち、**次の起動が続きから再開する**。人の操作は要らない。
+
+## 使い方
+
+    python scripts/weekly_deep_driver.py                # 生成→執筆→vault同期
+    python scripts/weekly_deep_driver.py --dry-run      # vault同期せず output/ のみ
+    python scripts/weekly_deep_driver.py --restart      # 途中状態を捨てて最初から
+    python scripts/weekly_deep_driver.py --max-sections 3   # 1回の起動で3節だけ書く
+    python scripts/weekly_deep_driver.py --pack output/briefing/PF_20260725.json
+
+## 終了コード
+
+    0 … 全節完了・保存済み
+    2 … 使用量上限などで中断（state は残る。再実行すれば続きから）
+    1 … 異常終了
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
+SPEC_PATH = REPO / ".claude" / "prompts" / "weekly_deep.md"
+DEFAULT_OUT = REPO / "output" / "weekly_deep"
+
+#: 中断（＝再開すればよい）と判定する文言。異常終了と区別する。
+LIMIT_MARKERS = (
+    "usage limit", "rate limit", "rate_limit", "quota",
+    "上限", "too many requests", "overloaded", "capacity",
+    "insufficient credit", "credit balance",
+)
+
+EXIT_OK, EXIT_ERROR, EXIT_INTERRUPTED = 0, 1, 2
+
+
+def log(msg: str) -> None:
+    # 出力先が閉じても（`| head` 等）執筆を止めない。無人実行の途中死を防ぐ。
+    try:
+        print(f"[deep] {msg}", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# パックのスライス — 節ごとに必要な材料だけ渡してトークンを節約する
+# ---------------------------------------------------------------------------
+
+
+def _slim_holding(h: dict) -> dict:
+    """一覧用の軽い保有ビュー（節の文脈用）。"""
+    return {k: h.get(k) for k in (
+        "name", "symbol", "weight_pct", "value_jpy", "pl_pct",
+        "week_change_pct", "leverage",
+    )}
+
+
+def _sum(rows: list[dict], key: str) -> Optional[float]:
+    vals = [r.get(key) for r in rows if isinstance(r.get(key), (int, float))]
+    return sum(vals) if vals else None
+
+
+def _aggregate_rows(symbol: str, rows: list[dict]) -> dict:
+    """同一銘柄が複数口座（特定/NISA等）に分かれている場合の合算ビュー。"""
+    return {
+        "symbol": symbol,
+        "name": rows[0].get("name") if rows else None,
+        "accounts": [r.get("account") for r in rows],
+        "shares": _sum(rows, "shares"),
+        "value_jpy": _sum(rows, "value_jpy"),
+        "pl_jpy": _sum(rows, "pl_jpy"),
+        "weight_pct": _sum(rows, "weight_pct"),
+        "rows": len(rows),
+    }
+
+
+def holding_key(h: dict) -> str:
+    """節をまとめるキー。ティッカーが無い投信（FANG+等）は名前で束ねる。
+
+    シンボル無しを捨てると**保有の一部が黙ってレポートから消える**ので、必ず拾う。
+    """
+    return str(h.get("symbol") or f"name:{h.get('name') or '無名'}")
+
+
+def group_holdings(pack: dict) -> list[tuple[str, list[dict]]]:
+    """保有をキーでまとめ、合算比率の降順で返す。
+
+    同じ銘柄を特定口座と NISA で持っている場合に**節が二重になるのを防ぐ**。
+    """
+    groups: dict[str, list[dict]] = {}
+    for h in pack.get("holdings") or []:
+        groups.setdefault(holding_key(h), []).append(h)
+    return sorted(groups.items(),
+                  key=lambda kv: (_sum(kv[1], "weight_pct") or 0.0), reverse=True)
+
+
+def slice_pack(pack: dict, section: dict) -> dict:
+    """節が必要とする材料だけを抜き出す。"""
+    kind = section["kind"]
+    meta = {"meta": pack.get("meta"), "portfolio": pack.get("portfolio")}
+
+    if kind == "macro":
+        return {**meta,
+                "indices": pack.get("indices"),
+                "market_news": pack.get("market_news"),
+                "moomoo": pack.get("moomoo"),
+                "forward_schedule": pack.get("forward_schedule"),
+                "holdings_overview": [_slim_holding(h) for h in pack.get("holdings") or []]}
+
+    if kind == "schedule":
+        return {**meta,
+                "forward_schedule": pack.get("forward_schedule"),
+                "moomoo": pack.get("moomoo"),
+                "holdings_overview": [_slim_holding(h) for h in pack.get("holdings") or []],
+                "competitors": {h.get("symbol"): h.get("competitors")
+                                for h in pack.get("holdings") or [] if h.get("competitors")}}
+
+    if kind == "holding":
+        key = section["key"]
+        sym = section.get("symbol")
+        rows = [h for h in pack.get("holdings") or [] if holding_key(h) == key]
+        return {**meta,
+                "holding_rows": rows,
+                "aggregate": _aggregate_rows(key, rows),
+                "indices": pack.get("indices"),
+                "news": (pack.get("holding_news") or {}).get(sym) or [],
+                "forward_schedule": [e for e in pack.get("forward_schedule") or []
+                                     if not e.get("symbol") or e.get("symbol") == sym],
+                "prior_context": pack.get("prior_context")}
+
+    if kind == "heat":
+        return {**meta,
+                "holdings_technicals": [
+                    {"symbol": h.get("symbol"), "name": h.get("name"),
+                     "weight_pct": h.get("weight_pct"), "pl_jpy": h.get("pl_jpy"),
+                     "pl_pct": h.get("pl_pct"), "technicals": h.get("technicals")}
+                    for h in pack.get("holdings") or []],
+                "indices": pack.get("indices")}
+
+    if kind == "cumulative":
+        return {**meta,
+                "prior_context": pack.get("prior_context"),
+                "wow_deltas": [{"symbol": h.get("symbol"), "name": h.get("name"),
+                                "wow_delta": h.get("wow_delta")}
+                               for h in pack.get("holdings") or []],
+                "projection": pack.get("projection"),
+                "scenarios": pack.get("scenarios")}
+
+    if kind == "limits":
+        return {**meta,
+                "positions_assumptions": pack.get("positions_assumptions"),
+                "projection": pack.get("projection")}
+
+    # actions / summary は「これまでに書いた本文」が材料なので meta だけ
+    return meta
+
+
+# ---------------------------------------------------------------------------
+# 節の定義
+# ---------------------------------------------------------------------------
+
+
+def build_sections(pack: dict) -> list[dict]:
+    """パックの保有内容に応じて節リストを組み立てる（実行順）。
+
+    エグゼクティブサマリーは**最後に書いて先頭に置く**（全節を読んでから書くため）。
+    """
+    sections: list[dict] = [
+        {"id": "macro", "kind": "macro", "order": 20,
+         "heading": "## 1. 今週のマクロ環境と保有への波及",
+         "spec": "仕様の「### 2. 今週のマクロ環境と保有への波及」に従って書く。"},
+        {"id": "schedule", "kind": "schedule", "order": 30,
+         "heading": "## 2. 今後の日程と保有株への影響",
+         "spec": "仕様の「### 3. 今後の日程と保有株への影響」に従って書く。"},
+    ]
+
+    for i, (key, rows) in enumerate(group_holdings(pack)):
+        sym = rows[0].get("symbol")
+        name = rows[0].get("name") or key
+        label = f"{name}（{sym}）" if sym else name
+        sections.append({
+            "id": "holding_" + "".join(
+                c if c.isalnum() else "_" for c in key)[:40],
+            "kind": "holding", "key": key, "symbol": sym, "order": 40 + i,
+            "heading": f"### {label}",
+            "spec": ("仕様の「### 4. 銘柄別の深掘り」の5点（値動きと損益／前回からの変化／"
+                     "今後の日程／競合の含意／推奨アクション）を**この銘柄について**順に書く。"
+                     "見出しは渡した heading をそのまま使い、その下に本文を書く。"
+                     "同一銘柄が複数口座にある場合は `holding_rows` に全行が入っているので"
+                     "**合算(`aggregate`)で語り**、口座差は必要なときだけ触れる。"),
+        })
+
+    sections += [
+        {"id": "heat", "kind": "heat", "order": 60,
+         "heading": "## 4. 過熱 / 売られすぎ 横断ビュー",
+         "spec": "仕様の「### 5. 過熱 / 売られすぎ 横断ビュー」に従って書く。"},
+        {"id": "cumulative", "kind": "cumulative", "order": 70,
+         "heading": "## 5. 週次の積み重ね（累積推移）",
+         "spec": "仕様の「### 6. 週次の積み重ね」に従って書く。"},
+        {"id": "actions", "kind": "actions", "order": 80,
+         "heading": "## 6. 統合アクションプラン",
+         "spec": ("仕様の「### 7. 統合アクションプラン」に従って書く。"
+                  "材料は**これまでに書いた本文**。新しい数字を捏造せず、本文の内容から導く。"),
+         "needs_body": True},
+        {"id": "limits", "kind": "limits", "order": 90,
+         "heading": "## 7. 前提と限界 / 根拠の系譜",
+         "spec": "仕様の「### 8. 前提と限界 + 系譜サマリ」に従って書く。",
+         "needs_body": True},
+        {"id": "summary", "kind": "summary", "order": 10,
+         "heading": "## 0. エグゼクティブサマリー",
+         "spec": ("仕様の「### 1. エグゼクティブサマリー（15行以内・最重要）」に従って書く。"
+                  "材料は**これまでに書いた本文全体**。15行以内。"
+                  "推奨アクションが無いなら「アクション不要、監視継続」と明言する。"),
+         "needs_body": True},
+    ]
+    return sections
+
+
+# ---------------------------------------------------------------------------
+# state
+# ---------------------------------------------------------------------------
+
+
+def state_path(out_dir: Path, day: str) -> Path:
+    return out_dir / f"state_{day}.json"
+
+
+def load_state(path: Path) -> Optional[dict]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def find_resumable(out_dir: Path, max_age_days: int = 3) -> Optional[Path]:
+    """未完了の state を新しい順に探す。
+
+    上限中断からの再開が翌日にずれ込んでも、**同じ週のレポートを書き継ぐ**ため。
+    日付をまたぐと別ファイルになって最初からやり直す、という事故を防ぐ。
+    """
+    today = date.today()
+    best: Optional[tuple[str, Path]] = None
+    for p in out_dir.glob("state_*.json"):
+        st = load_state(p)
+        if not st or st.get("finished"):
+            continue
+        day = str(st.get("date") or "")
+        try:
+            age = (today - datetime.strptime(day, "%Y%m%d").date()).days
+        except Exception:
+            continue
+        if 0 <= age <= max_age_days and (best is None or day > best[0]):
+            best = (day, p)
+    return best[1] if best else None
+
+
+def save_state(path: Path, state: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    state["updated_at"] = datetime.now(timezone.utc).isoformat()
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# headless claude 呼び出し
+# ---------------------------------------------------------------------------
+
+
+def claude_bin() -> Optional[str]:
+    return os.environ.get("CLAUDE_BIN") or shutil.which("claude")
+
+
+def kill_tree(pid: int) -> None:
+    """子孫ごと止める。Windows では孫（node）が残るとタイムアウトが効かない。"""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)],
+                           capture_output=True, timeout=30)
+        else:
+            os.kill(pid, 9)
+    except Exception:
+        pass
+
+
+def looks_like_limit(text: str) -> bool:
+    low = (text or "").lower()
+    return any(m in low for m in LIMIT_MARKERS)
+
+
+def run_claude(prompt: str, model: str, timeout: int) -> dict:
+    """`claude -p` を1回叩く。戻り値: {ok, text, interrupted, error}"""
+    exe = claude_bin()
+    if not exe:
+        return {"ok": False, "interrupted": False,
+                "error": "claude CLI が見つかりません（CLAUDE_BIN で指定可）"}
+
+    cmd = [exe, "-p", "--output-format", "json", "--allowedTools", ""]
+    if model:
+        cmd += ["--model", model]
+
+    # パイプではなくファイルで受け渡す。Windows では子を kill しても孫がパイプを
+    # 掴んだままだと subprocess.run が復帰せず、タイムアウトが効かない事故になる。
+    with tempfile.TemporaryDirectory(prefix="weekly_deep_") as tmp:
+        tmpd = Path(tmp)
+        in_p, out_p, err_p = tmpd / "in.txt", tmpd / "out.json", tmpd / "err.txt"
+        in_p.write_text(prompt, encoding="utf-8")
+        with in_p.open("r", encoding="utf-8") as fin, \
+                out_p.open("w", encoding="utf-8") as fout, \
+                err_p.open("w", encoding="utf-8") as ferr:
+            proc = subprocess.Popen(cmd, stdin=fin, stdout=fout, stderr=ferr,
+                                    cwd=str(REPO))
+            try:
+                returncode = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                kill_tree(proc.pid)
+                return {"ok": False, "interrupted": True,
+                        "error": f"タイムアウト({timeout}s)"}
+        raw = out_p.read_text(encoding="utf-8", errors="replace").strip()
+        errtxt = err_p.read_text(encoding="utf-8", errors="replace").strip()
+
+    payload: dict[str, Any] = {}
+    for candidate in (raw, raw[raw.find("{"):] if "{" in raw else ""):
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            payload = parsed
+            break
+
+    text = (payload.get("result") or "").strip() if payload else raw
+
+    if returncode != 0 or (payload and payload.get("is_error")):
+        blob = f"{text}\n{errtxt}"
+        return {"ok": False, "interrupted": looks_like_limit(blob),
+                "error": (blob.strip()[:600] or f"exit={returncode}")}
+    if not text:
+        return {"ok": False, "interrupted": False, "error": "空の応答"}
+    return {"ok": True, "interrupted": False, "text": text,
+            "cost_usd": (payload.get("total_cost_usd") if payload else None)}
+
+
+def build_prompt(spec: str, section: dict, material: dict, body_so_far: str) -> str:
+    parts = [
+        "あなたは投資家本人に向けた週次ポートフォリオ深掘りレポートの、**指定された1節だけ**を書く。",
+        "",
+        "# 執筆仕様（全体）",
+        spec,
+        "",
+        "# いま書く節",
+        f"- 見出し: `{section['heading']}`",
+        f"- 指示: {section['spec']}",
+        "",
+        "# 出力ルール（厳守）",
+        "- **この節の Markdown 本文だけ**を出力する。前置き・後書き・コードフェンス・"
+        "「承知しました」の類は一切書かない。",
+        "- 冒頭は必ず上記の見出し行から始める。",
+        "- 渡された材料に無い数字を作らない。空・欠損は「取得できず」と明示する。",
+        "- 他の節の内容を重複して書かない。",
+        "",
+        "# 材料（ブリーフィングパックの該当部分・JSON）",
+        "```json",
+        json.dumps(material, ensure_ascii=False, indent=2)[:180000],
+        "```",
+    ]
+    if section.get("needs_body") and body_so_far:
+        parts += [
+            "",
+            "# これまでに書いた本文（この節の材料）",
+            body_so_far[-60000:],
+        ]
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# 組み立て
+# ---------------------------------------------------------------------------
+
+
+def _fmt(v, unit: str = "", digits: int = 0) -> str:
+    if v is None:
+        return "取得できず"
+    if isinstance(v, (int, float)):
+        return f"{v:,.{digits}f}{unit}"
+    return str(v)
+
+
+def build_header(pack: dict) -> str:
+    meta = pack.get("meta") or {}
+    pf = pack.get("portfolio") or {}
+    today = meta.get("as_of") or date.today().isoformat()
+    lines = [
+        "---",
+        f"title: 週次PF分析 {today}",
+        "tags: [投資, ポートフォリオ, 週次レポート]",
+        f"created: {today}",
+        "---",
+        "",
+        f"# 週次ポートフォリオ深掘り分析 {today}",
+        "",
+        f"- 総資産: ¥{_fmt(pf.get('total_jpy'))}"
+        f"（うち現金 ¥{_fmt(pf.get('cash_jpy'))}）",
+        f"- 評価損益: ¥{_fmt(pf.get('total_pl_jpy'))}"
+        f"（{_fmt(pf.get('pl_pct'), '%', 1)}）",
+        f"- 為替: {_fmt(meta.get('fx_rate'), ' 円/USD', 2)}",
+        f"- 保有データ源: {meta.get('holdings_source') or '不明'}"
+        f" / 取り込み: {meta.get('holdings_import') or '不明'}",
+    ]
+    for w in meta.get("warnings") or []:
+        lines.append(f"- ⚠️ {w}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def assemble(state: dict, out_dir: Path, pack: dict) -> str:
+    body = [build_header(pack)]
+    holdings_heading_done = False
+    for s in sorted(state["sections"], key=lambda x: x["order"]):
+        if s.get("status") != "done" or not s.get("file"):
+            continue
+        try:
+            text = (out_dir / s["file"]).read_text(encoding="utf-8").strip()
+        except Exception:
+            continue
+        # 銘柄別（### 見出し）の塊に親見出しを1つだけ立てる
+        if s.get("kind") == "holding" and not holdings_heading_done:
+            body.append("## 3. 銘柄別の深掘り（保有比率順）")
+            holdings_heading_done = True
+        body.append(text)
+    return "\n\n".join(p for p in body if p) + "\n"
+
+
+def body_for_prompt(state: dict, out_dir: Path) -> str:
+    parts = []
+    for s in sorted(state["sections"], key=lambda x: x["order"]):
+        if s.get("status") == "done" and s.get("file"):
+            try:
+                parts.append((out_dir / s["file"]).read_text(encoding="utf-8").strip())
+            except Exception:
+                pass
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+
+
+def ensure_pack(pack_arg: Optional[str], out_dir: Path, no_moomoo: bool) -> Optional[Path]:
+    if pack_arg:
+        p = Path(pack_arg)
+        return p if p.exists() else None
+    cmd = [sys.executable, str(REPO / "scripts" / "build_briefing_pack.py")]
+    if no_moomoo:
+        cmd.append("--no-moomoo")
+    log("ブリーフィングパックを生成中...")
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", cwd=str(REPO))
+    for line in (proc.stderr or "").splitlines():
+        log(line)
+    if proc.returncode != 0:
+        return None
+    last = [l.strip() for l in (proc.stdout or "").splitlines() if l.strip()]
+    return Path(last[-1]) if last else None
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="週次PF深掘りレポート 無人駆動")
+    ap.add_argument("--pack", help="既存のブリーフィングパック JSON")
+    ap.add_argument("--out-dir", default=str(DEFAULT_OUT))
+    ap.add_argument("--model", default=os.environ.get("WEEKLY_DEEP_MODEL", "opus"))
+    ap.add_argument("--timeout", type=int, default=900, help="1節あたりの秒数")
+    ap.add_argument("--max-sections", type=int, default=0, help="1回の起動で書く節数上限(0=無制限)")
+    ap.add_argument("--max-attempts", type=int, default=2, help="1節あたりの再試行回数")
+    ap.add_argument("--restart", action="store_true", help="途中状態を捨てて最初から")
+    ap.add_argument("--resume-within-days", type=int, default=3,
+                    help="日付をまたいだ未完了レポートを引き継ぐ日数")
+    ap.add_argument("--resume-only", action="store_true",
+                    help="未完了の途中状態がある時だけ動く（再開タスク用。無ければ何もせず終了）")
+    ap.add_argument("--dry-run", action="store_true", help="vault 同期せず output/ のみ")
+    ap.add_argument("--no-moomoo", action="store_true")
+    args = ap.parse_args()
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    day = date.today().strftime("%Y%m%d")
+    spath = state_path(out_dir, day)
+
+    state = None if args.restart else load_state(spath)
+
+    if state and state.get("finished"):
+        log(f"本日分は完了済み: {state.get('report_path')}")
+        return EXIT_OK
+
+    # 日付をまたいだ再開（上限中断が翌日に持ち越された場合）
+    if state is None and not args.restart:
+        prior = find_resumable(out_dir, args.resume_within_days)
+        if prior is not None:
+            state = load_state(prior)
+            spath = prior
+            day = str(state.get("date") or day)
+            log(f"未完了の週次({day})を引き継いで再開します。")
+
+    if state:
+        pack_path = Path(state["pack_path"])
+        if not pack_path.exists():
+            log("記録されたパックが見つかりません。作り直します。")
+            state = None
+
+    if not state and args.resume_only:
+        log("再開すべき途中状態はありません（--resume-only のため何もしません）。")
+        return EXIT_OK
+
+    if not state:
+        pack_path = ensure_pack(args.pack, out_dir, args.no_moomoo)
+        if not pack_path or not pack_path.exists():
+            log("❌ パックを用意できませんでした")
+            return EXIT_ERROR
+        pack = json.loads(pack_path.read_text(encoding="utf-8"))
+        state = {
+            "date": day,
+            "pack_path": str(pack_path.resolve()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "model": args.model,
+            "finished": False,
+            "report_path": None,
+            "sections": [
+                {**{k: v for k, v in s.items()},
+                 "status": "pending", "attempts": 0, "file": None}
+                for s in build_sections(pack)
+            ],
+        }
+        save_state(spath, state)
+    else:
+        pack = json.loads(Path(state["pack_path"]).read_text(encoding="utf-8"))
+
+    spec = SPEC_PATH.read_text(encoding="utf-8") if SPEC_PATH.exists() else ""
+    if not spec:
+        log(f"❌ 執筆仕様が見つかりません: {SPEC_PATH}")
+        return EXIT_ERROR
+
+    sec_dir = out_dir / day
+    sec_dir.mkdir(parents=True, exist_ok=True)
+
+    written = 0
+    for s in state["sections"]:
+        if s.get("status") == "done":
+            continue
+        if s.get("attempts", 0) >= args.max_attempts:
+            log(f"⏭️  {s['id']}: 再試行上限に達しているため飛ばします")
+            continue
+        if args.max_sections and written >= args.max_sections:
+            log(f"この起動の上限({args.max_sections}節)に達しました。次回続きから。")
+            save_state(spath, state)
+            return EXIT_INTERRUPTED
+
+        log(f"✍️  {s['id']} を執筆中（{written + 1}節目）...")
+        material = slice_pack(pack, s)
+        body = body_for_prompt(state, out_dir) if s.get("needs_body") else ""
+        prompt = build_prompt(spec, s, material, body)
+
+        t0 = time.time()
+        s["attempts"] = s.get("attempts", 0) + 1
+        res = run_claude(prompt, args.model, args.timeout)
+
+        if res.get("ok"):
+            fname = f"{s['order']:02d}_{s['id']}.md"
+            (sec_dir / fname).write_text(res["text"] + "\n", encoding="utf-8")
+            s["status"] = "done"
+            s["file"] = f"{day}/{fname}"
+            s["cost_usd"] = res.get("cost_usd")
+            written += 1
+            # ログより先に state を確定させる（ログ側の失敗で節を書き直さないため）
+            save_state(spath, state)
+            log(f"   ✅ {s['id']} 完了（{time.time() - t0:.0f}s）")
+            continue
+
+        s["status"] = "failed"
+        s["error"] = res.get("error")
+        save_state(spath, state)
+        if res.get("interrupted"):
+            log(f"⏸️  中断（使用量上限/タイムアウトの可能性）: {res.get('error')}")
+            log("   次の起動で続きから再開します。")
+            return EXIT_INTERRUPTED
+        log(f"   ⚠️ {s['id']} 失敗: {res.get('error')}")
+
+    remaining = [s for s in state["sections"]
+                 if s.get("status") != "done" and s.get("attempts", 0) < args.max_attempts]
+    if remaining:
+        log(f"未完了 {len(remaining)} 節が残っています。次の起動で再開します。")
+        save_state(spath, state)
+        return EXIT_INTERRUPTED
+
+    report = assemble(state, out_dir, pack)
+    done = sum(1 for s in state["sections"] if s.get("status") == "done")
+    log(f"全{len(state['sections'])}節中 {done}節を執筆。レポートを組み立てました。")
+
+    if args.dry_run:
+        print(report)
+        state["finished"] = True
+        save_state(spath, state)
+        return EXIT_OK
+
+    filename = f"週次PF分析_{day}.md"
+    try:
+        from src.output.sync import save_and_sync
+
+        result = save_and_sync(report, filename)
+        for m in result.get("messages", []):
+            log(f"save: {m}")
+        state["report_path"] = result.get("output_path")
+        state["synced_path"] = result.get("synced_path")
+        verify = result.get("verify") or {}
+        if verify and verify.get("ok") is False:
+            log(f"❌ 検証NG: {verify}")
+            save_state(spath, state)
+            return EXIT_ERROR
+        state["finished"] = True
+        save_state(spath, state)
+        print(f"✅ 週次深掘りレポート: {result.get('output_path')}")
+        if result.get("synced_path"):
+            print(f"   vault: {result['synced_path']}")
+        elif result.get("degraded"):
+            print("   ⚠️ vault へ同期できず output/ のみ保存しました。")
+    except Exception as e:
+        log(f"❌ 保存に失敗: {e}")
+        save_state(spath, state)
+        return EXIT_ERROR
+
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())

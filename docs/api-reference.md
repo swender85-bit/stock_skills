@@ -475,6 +475,23 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `save_note(symbol: str, note_type: str, content: str, *, category: str='stock', base_dir: str='data/notes') -> str` — Save an investment note. Returns absolute path of saved file.
 - `list_notes(symbol: str | None=None, note_type: str | None=None, category: str | None=None, base_dir: str='data/notes') -> list[dict]` — Return notes matching the given filters.
 
+### src.core.research.briefing_pack
+
+繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕滓�� 窶� Claude 縺ｮ豺ｱ謗倥ｊ synthesis 縺ｫ貂｡縺吶悟�ｨ譚先侭縲阪ｒ1縺､縺ｫ譚溘�ｭ繧句ｱ､縲�
+
+- `week_over_week_delta(symbol: str, current: dict, prior_index: dict[str, list[dict]], today: Optional[str]=None) -> Optional[dict]` — 1驫俶氛縺ｮ縲悟燕蝗槭せ繝翫ャ繝励す繝ｧ繝�繝医°繧峨�ｮ螟牙喧縲阪ｒ霑斐☆縲ら┌縺代ｌ縺ｰ None縲�
+- `build_portfolio_briefing(config: Optional[dict]=None, rss_snapshot: Optional[dict]=None, monthly_contribution: float=50000.0, include_moomoo: bool=True, include_context: bool=True) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ繧堤ｵ�縺ｿ遶九※繧具ｼ磯ｱ谺｡繝ｬ繝昴�ｼ繝育畑�ｼ峨�
+- `build_symbol_briefing(symbol: str, include_moomoo: bool=True, include_context: bool=True) -> dict` — 蜊倅ｸ驫俶氛�ｼ狗ｫｶ蜷茨ｼ区欠謨ｰ縺ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ�ｼ亥句挨雉ｪ蝠上悟ｸｸ縺ｫ蜈ｨ蜉帙咲畑�ｼ峨�
+
+### src.core.research.competitors
+
+遶ｶ蜷医�ｻ繝吶Ν繧ｦ繧ｧ繧ｶ繝ｼ縺ｮ逶ｴ霑代�ｮ蛟､蜍輔″縺ｨ繝舌Μ繝･繧ｨ繝ｼ繧ｷ繝ｧ繝ｳ繧帝寔繧√ｋ繝｢繧ｸ繝･繝ｼ繝ｫ縲�
+
+- `peers_for(symbol: str, sector: Optional[str]=None, holdings: Optional[list[str]]=None) -> list[str]` — symbol 縺ｮ遶ｶ蜷�/繝吶Ν繧ｦ繧ｧ繧ｶ繝ｼ繧定ｿ斐☆縲�
+- `peer_note(symbol: str) -> Optional[str]`
+- `fetch_peer_snapshot(symbol: str, client: Any=None) -> Optional[dict]` — 1縺､縺ｮ peer 縺ｮ逶ｴ霑代せ繝翫ャ繝励す繝ｧ繝�繝茨ｼ井ｾ｡譬ｼ繝ｻ騾ｱ髢馴ｨｰ關ｽ繝ｻ繝舌Μ繝･繧ｨ繝ｼ繧ｷ繝ｧ繝ｳ繝ｻ謌宣聞�ｼ峨�
+- `build_peer_context(symbols: list[str], client: Any=None, max_peers: int=5) -> dict[str, dict]` — 菫晄怏蜷�驫俶氛縺ｫ縺､縺�縺ｦ縲∫ｫｶ蜷医せ繝翫ャ繝励す繝ｧ繝�繝医�ｮ繝ｪ繧ｹ繝医ｒ邨�縺ｿ遶九※繧九�
+
 ### src.core.research.outcome_tracker
 
 驕主悉蛻､譁ｭ縺ｮ遲斐∴蜷医ｏ縺幢ｼ亥ｭｦ鄙偵Ν繝ｼ繝� / upgrade v1.0 Phase 4�ｼ峨�

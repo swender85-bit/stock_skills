@@ -1,15 +1,43 @@
 # 週次ポートフォリオ分析レポート
 
+## 2層アーキテクチャ（材料集め + Claude synthesis）
+
+旧レポート（`weekly_report.py`）は Python の文字列整形で数字を並べるだけで、
+**「材料 → 保有株への含意」をつなぐ解釈層が無かった**。深掘り版は2層に分ける。
+
+```
+層1  ブリーフィングパック生成（Python・トークン0）
+     scripts/build_briefing_pack.py → output/briefing/PF_YYYYMMDD.json
+     保有・前回差分・指数・ニュース・moomoo・競合・過去テーゼ/懸念/lesson を全部束ねる
+
+層2  Claude synthesis（headless `claude -p`・節単位チェックポイント）
+     scripts/weekly_deep_driver.py + .claude/prompts/weekly_deep.md
+```
+
+**節単位である理由**: 1節=1回の `claude -p`。書けた節はファイルに落として
+`state_YYYYMMDD.json` に記録するので、使用量上限に当たっても中断（exit 2）で済み、
+次の起動が**続きから**再開する。人の操作は要らない。
+
+節の並び: マクロ → 今後の日程 → 銘柄別（保有比率降順・1銘柄1節）→ 過熱横断 →
+週次の積み重ね → 統合アクション → 前提と限界 → **エグゼクティブサマリー（最後に書いて先頭に置く）**。
+各節には**その節が必要とする材料だけ**を渡す（`slice_pack`）ので、密度を落とさずトークンを抑える。
+
 ## スケジュール
 
 **毎週土曜 07:12 JST** に Windows タスクスケジューラが自動実行する。
 
 ```
-タスク名: StockSkills\WeeklyReport
-実体:     scripts\run_weekly_report.bat → scripts\weekly_report.py
-ログ:     output\weekly_report.log（追記）
+タスク名: StockSkills\WeeklyDeep         （本番・土曜 07:12）
+          StockSkills\WeeklyDeepResume   （3時間ごと・--resume-only）
+実体:     scripts\run_weekly_deep.bat → scripts\weekly_deep_driver.py
+ログ:     output\weekly_deep.log（追記）
 出力:     C:\Users\swend\iCloudDrive\swender\投資記録\週次PF分析_YYYYMMDD.md
+旧版:     StockSkills\WeeklyReport（薄い版・フォールバックとして当面併存）
 ```
+
+`WeeklyDeepResume` は **未完了の途中状態があるときだけ**動く（`--resume-only`）。
+無ければ即終了するので、平日に勝手にレポートを書き始めることはない。
+中断が日をまたいでも `--resume-within-days`（既定3日）以内なら同じレポートを書き継ぐ。
 
 土曜朝にしてあるのは、**日本株の金曜引けと米国株の金曜引け（＝土曜朝5〜6時JST）の
 両方が確定した後**だから。
@@ -17,16 +45,32 @@
 手動実行:
 
 ```bash
-python scripts/weekly_report.py            # 通常
-python scripts/weekly_report.py --dry-run  # 保存せず標準出力
+python scripts/weekly_deep_driver.py                  # 生成→執筆→vault同期
+python scripts/weekly_deep_driver.py --dry-run        # 保存せず標準出力
+python scripts/weekly_deep_driver.py --max-sections 3 # 3節だけ書いて中断（動作確認用）
+python scripts/weekly_deep_driver.py --restart        # 途中状態を捨てて最初から
+python scripts/weekly_report.py                       # 旧・薄い版
 ```
 
 タスクの状態確認:
 
 ```powershell
-Get-ScheduledTaskInfo -TaskName 'WeeklyReport' -TaskPath '\StockSkills\'
-schtasks /Run /TN "StockSkills\WeeklyReport"   # 即時実行
+Get-ScheduledTaskInfo -TaskName 'WeeklyDeep' -TaskPath '\StockSkills\'
+schtasks /Run /TN "StockSkills\WeeklyDeep"   # 即時実行
+
+# 深掘り版が安定したら旧版を止める（元に戻すのは Enable-ScheduledTask）
+Disable-ScheduledTask -TaskName 'WeeklyReport' -TaskPath '\StockSkills\'
 ```
+
+## 個別銘柄も同じ2層で「常に全力」
+
+銘柄について聞かれたら、軽い聞き方でも毎回パックを作って深掘りする。
+
+```bash
+python scripts/build_briefing_pack.py --symbol SOXL   # → .claude/prompts/stock_deep.md で執筆
+```
+
+詳細は `.claude/rules/intent-routing.md` の「分析ドメイン」冒頭を参照。
 
 ## 保有・株価データの取得
 
