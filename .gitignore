@@ -4,6 +4,7 @@ data/watchlists/
 data/screening_results/
 data/notes/
 data/decisions/
+data/policies/
 __pycache__/
 *.pyc
 .venv/
