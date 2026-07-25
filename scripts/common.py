@@ -1,9 +1,8 @@
 """Common utilities for skill scripts -- graceful imports and context."""
 
-import signal
 import sys
-from contextlib import contextmanager
-from typing import Optional
+import threading
+from typing import Any, Callable, Optional
 
 # 全スキルスクリプトはこのモジュールを import する。Windows(cp932)では
 # 日本語や '—'(em dash) 等の出力で UnicodeEncodeError クラッシュするため、
@@ -17,29 +16,36 @@ for _stream in ("stdout", "stderr"):
 
 _CONTEXT_TIMEOUT = 10  # seconds — max wait for context/suggestions
 
-# SIGALRM は Unix 専用。Windows には存在しないため、あるときだけハードタイムアウトを使う。
-_HAS_SIGALRM = hasattr(signal, "SIGALRM")
 
+def _run_with_timeout(fn: Callable[[], Any], seconds: int = _CONTEXT_TIMEOUT,
+                      default: Any = None) -> Any:
+    """`fn()` を最大 `seconds` 秒だけ待ち、超えたら諦めて `default` を返す。
 
-@contextmanager
-def _timeout_guard(seconds: int):
-    """ベストエフォートのタイムアウト。
+    **Unix / Windows のどちらでも効く。** 以前は SIGALRM を使っていたため
+    Windows では「タイムアウトなし」に退化し、Neo4j や TEI が落ちている環境で
+    スキルスクリプトが無限に固まっていた（テストがサブプロセス越しにハングする
+    原因でもあった）。
 
-    Unix では SIGALRM で `seconds` 秒に制限する。SIGALRM を持たない環境
-    （Windows 等）では**タイムアウトなしで実処理を実行**する。以前は
-    `signal.SIGALRM` の AttributeError が握り潰され、コンテキスト取得や提案が
-    Windows で丸ごと無効化されていた（KIK upgrade v1.0 で修正）。
+    超過したワーカーは daemon スレッドなので、放置してもプロセス終了を妨げない。
+    ブロック中の実処理そのものを中断はできない（best effort）が、
+    **呼び出し側は待たされない**ことを保証する。
     """
-    if _HAS_SIGALRM:
-        old = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(seconds)
+    box: dict[str, Any] = {}
+
+    def _worker() -> None:
         try:
-            yield
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old)
-    else:
-        yield
+            box["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001 — 呼び出し側へ転送する
+            box["error"] = exc
+
+    t = threading.Thread(target=_worker, daemon=True, name="skill-timeout")
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        return default
+    if "error" in box:
+        raise box["error"]
+    return box.get("value", default)
 
 
 def try_import(module_path: str, *names: str):
@@ -104,10 +110,6 @@ except ImportError:
 # Graceful degradation: returns None / no output on any failure.
 # ---------------------------------------------------------------------------
 
-def _timeout_handler(signum, frame):
-    raise TimeoutError("Context/suggestion timeout")
-
-
 def print_context(user_input: str) -> Optional[str]:
     """Get and print graph context at script start.
 
@@ -119,8 +121,7 @@ def print_context(user_input: str) -> Optional[str]:
     try:
         from src.data.context.auto_context import get_context
 
-        with _timeout_guard(_CONTEXT_TIMEOUT):
-            result = get_context(user_input)
+        result = _run_with_timeout(lambda: get_context(user_input))
 
         if result and result.get("context_markdown"):
             print(result["context_markdown"])
@@ -147,8 +148,9 @@ def print_portfolio_news_watch(symbols: Optional[list[str]] = None) -> None:
             format_news_watch,
         )
 
-        with _timeout_guard(_CONTEXT_TIMEOUT):
-            data = build_news_watch(symbols=symbols)
+        data = _run_with_timeout(lambda: build_news_watch(symbols=symbols))
+        if data is None:
+            return
 
         output = format_news_watch(data)
         if output:
@@ -169,17 +171,20 @@ def print_removal_contexts(symbols: list[str]) -> None:
     try:
         from src.data.context.auto_context import get_context
 
-        with _timeout_guard(_CONTEXT_TIMEOUT):
-            contexts = []
+        def _collect() -> list[str]:
+            out = []
             for sym in symbols:
                 result = get_context(sym)
                 if result and result.get("context_markdown"):
-                    contexts.append(result["context_markdown"])
-            if contexts:
-                print("---")
-                print("## 売却候補のコンテキスト (KIK-470)\n")
-                print("\n\n".join(contexts))
-                print()
+                    out.append(result["context_markdown"])
+            return out
+
+        contexts = _run_with_timeout(_collect, default=[]) or []
+        if contexts:
+            print("---")
+            print("## 売却候補のコンテキスト (KIK-470)\n")
+            print("\n\n".join(contexts))
+            print()
     except Exception:
         pass  # graceful degradation
 
@@ -202,12 +207,14 @@ def print_suggestions(
     try:
         from src.core.proactive_engine import format_suggestions, get_suggestions
 
-        with _timeout_guard(_CONTEXT_TIMEOUT):
-            suggestions = get_suggestions(
+        suggestions = _run_with_timeout(
+            lambda: get_suggestions(
                 context=context_summary,
                 symbol=symbol,
                 sector=sector,
-            )
+            ),
+            default=[],
+        ) or []
 
         output = format_suggestions(suggestions)
         if output:

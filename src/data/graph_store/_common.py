@@ -64,7 +64,18 @@ def _get_driver():
         return _driver
     try:
         from neo4j import GraphDatabase
-        _driver = GraphDatabase.driver(_NEO4J_URI, auth=(_NEO4J_USER, _NEO4J_PASSWORD))
+
+        # スキーマがまだ空のうちは「そのリレーションは存在しない」系の通知が
+        # クエリごとに大量に出て、スキルの出力を埋め尽くす。実害はないので黙らせる。
+        # （対応していないドライバ版では TypeError → 通知ありで生成し直す）
+        try:
+            _driver = GraphDatabase.driver(
+                _NEO4J_URI, auth=(_NEO4J_USER, _NEO4J_PASSWORD),
+                notifications_min_severity="OFF",
+            )
+        except TypeError:
+            _driver = GraphDatabase.driver(
+                _NEO4J_URI, auth=(_NEO4J_USER, _NEO4J_PASSWORD))
         return _driver
     except Exception:
         return None

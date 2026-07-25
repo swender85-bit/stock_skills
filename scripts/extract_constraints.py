@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import signal
 import sys
 from pathlib import Path
 
@@ -48,18 +47,23 @@ def main():
     if not query:
         parser.error("query is required")
 
-    # Set timeout
-    if hasattr(signal, "SIGALRM"):
-        signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(_TIMEOUT)
-
     try:
+        from scripts.common import _run_with_timeout
         from src.data.context.constraint_extractor import (
             extract_constraints,
             format_constraints_markdown,
         )
 
-        result = extract_constraints(query, max_constraints=args.max_constraints)
+        # SIGALRM は Unix 専用で Windows では時間制限なしに退化していたため、
+        # OS 非依存のスレッド版タイムアウトを使う（scripts/common.py）。
+        sentinel = object()
+        result = _run_with_timeout(
+            lambda: extract_constraints(query, max_constraints=args.max_constraints),
+            _TIMEOUT,
+            default=sentinel,
+        )
+        if result is sentinel:
+            _timeout_handler(None, None)
 
         if args.format == "markdown":
             print(format_constraints_markdown(result))
@@ -68,9 +72,6 @@ def main():
     except Exception as e:
         print(f"エラー: {e}", file=sys.stderr)
         sys.exit(1)
-    finally:
-        if hasattr(signal, "SIGALRM"):
-            signal.alarm(0)
 
 
 if __name__ == "__main__":
