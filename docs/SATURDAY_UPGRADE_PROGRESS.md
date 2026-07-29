@@ -89,7 +89,71 @@ Finnhub の企業ニュース件数は母集団が違い、比にすると無意
 
 ---
 
-## S2 — 提案8（情報量比例・差分レポート） 🔄 着手
+## S2 — 提案8（情報量比例・差分レポート） ✅ 完了
+
+### 新規ファイル
+
+| ファイル | 役割 |
+|:---|:---|
+| `src/core/portfolio/report_diff.py` | 週次スナップショット・前週差分・4週/13週累積差分・情報量判定 |
+| `src/core/portfolio/falsification.py` | thesis の反証条件を点検（「信念の変化」を見る層） |
+| `src/output/weekly_diff_formatter.py` | 判定ブロック・信念セクション・折り畳み表示 |
+| `tests/core/test_report_diff.py` (21) / `tests/core/test_falsification.py` (24) | 受け入れ基準のテスト |
+
+### 変更ファイル
+- `src/data/note_manager.py` — `save_note(..., falsification=...)`（thesis 限定）
+- `manage_note.py` — `--falsification` 追加。**測定不能な条件は保存前に拒否**
+- `briefing_pack.py` — `falsification` / `week_diff` / `cumulative_diff` / `information`
+- `.gitignore` — `data/weekly_snapshots/`
+
+### 設計判断
+
+**1. 反証条件は測定可能でなければ受け付けない**
+
+「業績が悪化したら」は保存時に弾く。点検できない条件を許すと、書いた気になるだけで
+週次の点検対象が増えない。使える指標は政策台帳の `MEASURABLE_METRICS` を継承し、
+テーゼ検証向けに `revenue_growth` / `roe` / `earnings_growth` 等を追加した
+（政策側の集合は変えていない＝非破壊）。
+
+**2. 複数条件は OR**
+
+「全部壊れないと反証を認めない」は、間違いを認めない構造そのもの。1つでも成立したら反証。
+
+**3. 「指標が取れなかった」を「抵触なし」と言わない**
+
+`unknown` を独立の状態として持ち、レポートで「未点検」と明示する。
+
+**4. 静穏週の判定を厳しくした（設計書から踏み込んだ点）**
+
+素朴に実装すると、照合が `circular`（独立検証なし）でも孤児が6件あっても
+「静穏週・何もしなくてよい」と出てしまう。以下を要対応に数えるようにした:
+
+- 照合が `unreconciled` / `circular`（独立検証できていない）
+- 孤児ポジションの存在
+- 反証条件が未定義 / 点検不能な thesis
+
+**5. 緩慢な変化の第二の網**
+
+前週比だけだと「毎週2%ずつ下落」が週次閾値5%に永久に引っかからない。
+4週/13週の累積差分を併走させ、`slow_drift` として別枠で出す。
+N週前が無いときは直近で代用せず「蓄積中」と言う（代用すると検出が壊れる）。
+
+### 現状の実測結果（本人PF）
+
+```
+■ 今週の判定：要対応週（要対応 3件）
+  1. 【信念】反証条件が未定義の thesis 2件（MDT / QCOM）
+  2. 【照合】残高の独立検証ができていません
+  3. 【照合】孤児ポジション 6件（評価額の 77.6%）
+```
+
+→ **評価額の 77.6% が「なぜ持っているか未記述」。** 設計書が予告した通りの状態。
+
+### やることリスト（ユーザー側）
+- [ ] MDT / QCOM の thesis に反証条件を追加
+      例: `manage_note.py save --symbol QCOM --type thesis --content "..." --falsification "revenue_growth < 0"`
+- [ ] 孤児6件（味の素・ニトリ・SOXL・TECL・TQQQ・FANG+）に thesis か政策を付ける
+
 
 ## S3 — 提案3（手取り）＋ 提案9（現金・入金） ⬜ 未着手
 

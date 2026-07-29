@@ -18,3 +18,4 @@ config/user_profile.yaml
 /output/
 data/narrative/
 data/reconciliation/
+data/weekly_snapshots/

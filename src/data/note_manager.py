@@ -9,7 +9,7 @@ import json
 import uuid
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 _NOTES_DIR = "data/notes"
@@ -36,6 +36,7 @@ def save_note(
     take_profit: Optional[str] = None,
     origin: Optional[str] = None,
     validity: Optional[dict] = None,
+    falsification: Optional[Any] = None,
 ) -> dict:
     """Save a note to JSON file and Neo4j.
 
@@ -117,6 +118,14 @@ def save_note(
         # Fable5 案3: validity envelope(生成時レジーム・想定有効期限)
         if validity:
             note["validity"] = validity
+
+    # 土曜設計書 提案8: thesis の反証条件。
+    #
+    # 「何が起きたらこのテーゼは間違いだったと認めるか」を書かせる。これが無いと
+    # 週次で点検すべき対象が定義できず、レポートは価格の報告に退化する。
+    # 既存 thesis には後から補完を促すので、ここでは必須にしない（非破壊）。
+    if note_type == "thesis" and falsification:
+        note["falsification"] = falsification
 
     # KIK-566: exit-rule specific fields
     if note_type == "exit-rule":

@@ -260,6 +260,20 @@ Portfolio concentration analysis module.
 - `get_concentration_multiplier(hhi: float) -> float` — Derive a concentration multiplier from an HHI value.
 - `analyze_concentration(portfolio_data: list[dict], weights: list[float]) -> dict` — Perform multi-axis concentration analysis on a portfolio.
 
+### src.core.portfolio.falsification
+
+蜿崎ｨｼ譚｡莉ｶ縺ｮ轤ｹ讀� 窶� 縲御ｿ｡蠢ｵ縺ｮ螟牙喧縲阪ｒ騾ｱ谺｡縺ｧ隕九ｋ (蝨滓屆險ｭ險域嶌 謠先｡�8)縲�
+
+- `parse_condition(raw: Any) -> dict` — 蜿崎ｨｼ譚｡莉ｶ繧� {metric, op, value} 縺ｫ豁｣隕丞喧縺吶ｋ縲�
+- `parse_conditions(raw: Any) -> list[dict]` — 1縺､縺ｧ繧り､�謨ｰ縺ｧ繧ょ女縺代ｋ縲�1縺､縺ｧ繧ょ｣翫ｌ縺ｦ縺�縺溘ｉ蜈ｨ菴薙ｒ諡貞凄縺吶ｋ縲�
+- `market_state_from_holding(holding: dict) -> dict` — 繝代ャ繧ｯ縺ｮ菫晄怏陦後°繧峨∝渚險ｼ譚｡莉ｶ縺ｮ隧穂ｾ｡縺ｫ菴ｿ縺医ｋ迥ｶ諷九ｒ邨�縺ｿ遶九※繧九�
+- `check_thesis(thesis: dict, state: dict) -> dict` — thesis 1莉ｶ縺ｮ蜿崎ｨｼ譚｡莉ｶ繧定ｩ穂ｾ｡縺吶ｋ縲�
+- `check_all(holdings: list[dict], theses_by_symbol: Optional[dict]=None) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ蜿崎ｨｼ譚｡莉ｶ繧堤せ讀懊☆繧九�
+
+#### class InvalidFalsification
+貂ｬ螳壻ｸ崎�ｽ繝ｻ譖匁乂縺ｪ蜿崎ｨｼ譚｡莉ｶ縲�
+
+
 ### src.core.portfolio.fx_utils
 
 FX conversion utilities (KIK-511).
@@ -352,6 +366,18 @@ What-If portfolio simulation (KIK-376, KIK-451).
 - `apply_corporate_actions(config: dict, result: dict) -> tuple[dict, list[str]]` — 蛻�蜑ｲ/菴ｵ蜷医→蛻､螳壹＆繧後◆蟾ｮ蛻�縺縺第ｨ｡蝙九�ｮ譬ｪ謨ｰ繧定｣懈ｭ｣縺吶ｋ縲�
 - `run_reconciliation(holdings_config: Optional[dict]=None, *, report_data: Optional[dict]=None, sources: Optional[list[str]]=None, csv_path: Optional[str]=None, autostart_opend: bool=True, check_intent: bool=True) -> dict` — 險ｭ螳壹�ｮ隱ｭ縺ｿ霎ｼ縺ｿ縺九ｉ繝悶Ο繝ｼ繧ｫ繝ｼ蜿門ｾ励�ｻ辣ｧ蜷医∪縺ｧ繧�1譛ｬ縺ｧ陦後≧縲�
 - `days_since(iso_date: Optional[str]) -> Optional[int]`
+
+### src.core.portfolio.report_diff
+
+諠�蝣ｱ驥乗ｯ比ｾ九Ξ繝昴�ｼ繝� 窶� 蟾ｮ蛻�繧ｨ繝ｳ繧ｸ繝ｳ (蝨滓屆險ｭ險域嶌 謠先｡�8)縲�
+
+- `build_snapshot(pack: dict) -> dict` — 繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ縺九ｉ縲∝ｷｮ蛻�豈碑ｼ�逕ｨ縺ｮ讒矩蛹悶せ繝翫ャ繝励す繝ｧ繝�繝医ｒ菴懊ｋ縲�
+- `save_snapshot(snapshot: dict, base_dir: str=DEFAULT_SNAPSHOT_DIR) -> Optional[Path]`
+- `load_snapshots(base_dir: str=DEFAULT_SNAPSHOT_DIR) -> list[dict]` — 蜿､縺�鬆�縺ｫ蜈ｨ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医ｒ霑斐☆縲ょ｣翫ｌ縺溘ヵ繧｡繧､繝ｫ縺ｯ鬟帙�ｰ縺吶�
+- `prior_snapshot(snapshots: list[dict], weeks_back: int=1, today: Optional[str]=None) -> Optional[dict]` — N騾ｱ蜑阪�ｮ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医ら┌縺代ｌ縺ｰ None�ｼ�**莉｣繧上ｊ縺ｫ逶ｴ霑代ｒ菴ｿ繧上↑縺�**�ｼ峨�
+- `diff_snapshots(current: dict, previous: Optional[dict]) -> dict` — 莉企ｱ縺ｨ蜑埼ｱ繧呈ｯ碑ｼ�縺励∵怏諢上↑螟牙喧縺ｨ謚倥ｊ逡ｳ繧螟牙喧縺ｫ蛻�縺代ｋ縲�
+- `cumulative_diff(current: dict, snapshots: list[dict]) -> dict` — 4騾ｱ蜑阪�ｻ13騾ｱ蜑阪→縺ｮ邏ｯ遨榊ｷｮ蛻�縲�**邱ｩ諷｢縺ｪ謔ｪ蛹�**繧呈黒縺ｾ縺医ｋ縺溘ａ縺ｮ邯ｲ縲�
+- `assess_information(diff: dict, cumulative: Optional[dict]=None, *, falsified: Optional[list]=None, falsification: Optional[dict]=None, reconciliation: Optional[dict]=None, forward: Optional[dict]=None) -> dict` — 莉企ｱ縺ｮ諠�蝣ｱ驥上ｒ蛻､螳壹＠縲√Ξ繝昴�ｼ繝医�ｮ蛻�驥上ｒ豎ｺ繧√ｋ縲�
 
 ### src.core.portfolio.simulator
 
@@ -496,7 +522,7 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕滓�� 窶� Claude 縺ｮ豺ｱ謗倥ｊ synthesis 縺ｫ貂｡縺吶悟�ｨ譚先侭縲阪ｒ1縺､縺ｫ譚溘�ｭ繧句ｱ､縲�
 
 - `week_over_week_delta(symbol: str, current: dict, prior_index: dict[str, list[dict]], today: Optional[str]=None) -> Optional[dict]` — 1驫俶氛縺ｮ縲悟燕蝗槭せ繝翫ャ繝励す繝ｧ繝�繝医°繧峨�ｮ螟牙喧縲阪ｒ霑斐☆縲ら┌縺代ｌ縺ｰ None縲�
-- `build_portfolio_briefing(config: Optional[dict]=None, rss_snapshot: Optional[dict]=None, monthly_contribution: float=50000.0, include_moomoo: bool=True, include_context: bool=True, include_reconciliation: bool=True, capture_narrative: bool=True) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ繧堤ｵ�縺ｿ遶九※繧具ｼ磯ｱ谺｡繝ｬ繝昴�ｼ繝育畑�ｼ峨�
+- `build_portfolio_briefing(config: Optional[dict]=None, rss_snapshot: Optional[dict]=None, monthly_contribution: float=50000.0, include_moomoo: bool=True, include_context: bool=True, include_reconciliation: bool=True, capture_narrative: bool=True, store_snapshot: bool=True) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ繧堤ｵ�縺ｿ遶九※繧具ｼ磯ｱ谺｡繝ｬ繝昴�ｼ繝育畑�ｼ峨�
 - `build_symbol_briefing(symbol: str, include_moomoo: bool=True, include_context: bool=True, capture_narrative: bool=True) -> dict` — 蜊倅ｸ驫俶氛�ｼ狗ｫｶ蜷茨ｼ区欠謨ｰ縺ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ�ｼ亥句挨雉ｪ蝠上悟ｸｸ縺ｫ蜈ｨ蜉帙咲畑�ｼ峨�
 
 ### src.core.research.competitors
@@ -1228,7 +1254,7 @@ moomoo (OpenD) client 窶� 豌鈴�阪�ｻ謖�謨ｰ繧ｯ繧ｪ繝ｼ繝
 
 Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 
-- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None, stop_loss: Optional[str]=None, take_profit: Optional[str]=None, origin: Optional[str]=None, validity: Optional[dict]=None) -> dict` — Save a note to JSON file and Neo4j.
+- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None, stop_loss: Optional[str]=None, take_profit: Optional[str]=None, origin: Optional[str]=None, validity: Optional[dict]=None, falsification: Optional[Any]=None) -> dict` — Save a note to JSON file and Neo4j.
 - `load_notes(symbol: Optional[str]=None, note_type: Optional[str]=None, category: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load notes from JSON files.
 - `check_lesson_conflicts(new_lesson: dict, base_dir: str=_NOTES_DIR, similarity_threshold: float=0.5) -> list[dict]` — Check if a new lesson conflicts with existing lessons (KIK-564/570).
 - `get_exit_rules(symbol: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load exit-rule notes, optionally filtered by symbol (KIK-566).

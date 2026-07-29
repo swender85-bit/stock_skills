@@ -29,6 +29,21 @@ def cmd_save(args):
         if getattr(args, "expected_action", None):
             extra["expected_action"] = args.expected_action
 
+    # 土曜設計書 提案8: thesis の反証条件。
+    # 測定できない条件は保存前に弾く（書いた気になるだけのものを残さない）。
+    if args.type == "thesis" and getattr(args, "falsification", None):
+        from src.core.portfolio.falsification import (
+            InvalidFalsification,
+            parse_conditions,
+        )
+
+        try:
+            parse_conditions(args.falsification)
+        except InvalidFalsification as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+        extra["falsification"] = args.falsification
+
     note = save_note(
         symbol=args.symbol or None,
         note_type=args.type,
@@ -47,6 +62,15 @@ def cmd_save(args):
         print(f"  トリガー: {note['trigger']}")
     if note.get("expected_action"):
         print(f"  次回アクション: {note['expected_action']}")
+    if note.get("falsification"):
+        conds = note["falsification"]
+        conds = conds if isinstance(conds, list) else [conds]
+        print(f"  反証条件: {' / '.join(str(c) for c in conds)}")
+        print("  → 週次レポートが毎週この条件を点検します。成立したら最上位に出ます。")
+    elif note.get("type") == "thesis":
+        print("  ⚠️ 反証条件が未設定です。"
+              "『何が起きたらこのテーゼは間違いだったと認めるか』を決めておくと、"
+              "週次レポートが毎週点検します（--falsification 'operating_margin < 8'）。")
     # KIK-570: Show conflict warnings
     conflicts = note.get("_conflicts", [])
     if conflicts:
@@ -139,6 +163,10 @@ def main():
     p_save.add_argument("--source", default="manual", help="ソース (例: manual, health-check)")
     p_save.add_argument("--trigger", default=None, help="lessonのトリガー (type=lesson時のみ有効, KIK-534)")
     p_save.add_argument("--expected-action", default=None, help="次回期待アクション (type=lesson時のみ有効, KIK-534)")
+    p_save.add_argument(
+        "--falsification", action="append", default=None,
+        help="反証条件 (type=thesis時のみ)。『指標 演算子 数値』の形。複数可。"
+             "例: --falsification 'operating_margin < 8' --falsification 'revenue_growth < 0'")
     p_save.set_defaults(func=cmd_save)
 
     # list

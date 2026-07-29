@@ -312,6 +312,52 @@ def _safe_narrative(holdings: list[dict], capture: bool) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# 差分レポート / 信念の点検 (土曜設計書 提案8)
+# ---------------------------------------------------------------------------
+
+
+def _safe_falsification(holdings: list[dict]) -> dict:
+    """反証条件の点検。**価格ではなく信念の変化**を最初に見るための材料。"""
+    try:
+        from src.core.portfolio.falsification import check_all
+
+        return check_all(holdings)
+    except Exception as e:
+        return {"falsified": [], "near": [], "unchecked": [], "missing": [],
+                "intact": 0, "checked": 0,
+                "error": f"{type(e).__name__}: {e}"}
+
+
+def _safe_diff(pack_like: dict, store: bool) -> dict:
+    """前週スナップショットとの差分＋累積差分。今週分の保存もここで行う。
+
+    保存を分析より先に済ませると、途中で落ちても**来週の比較対象は残る**。
+    """
+    out: dict = {"diff": {"available": False, "reason": "差分エンジンが使えません"},
+                 "cumulative": {}, "snapshot_saved": None}
+    try:
+        from src.core.portfolio import report_diff as rd
+    except Exception:
+        return out
+
+    try:
+        snapshot = rd.build_snapshot(pack_like)
+        history = rd.load_snapshots()
+        prev = rd.prior_snapshot(history, weeks_back=1,
+                                 today=str(snapshot.get("date") or ""))
+        out["diff"] = rd.diff_snapshots(snapshot, prev)
+        out["cumulative"] = rd.cumulative_diff(snapshot, history)
+        if store:
+            path = rd.save_snapshot(snapshot)
+            out["snapshot_saved"] = str(path) if path else None
+        out["history_weeks"] = len(history)
+    except Exception as e:
+        out["diff"] = {"available": False,
+                       "reason": f"差分計算に失敗: {type(e).__name__}: {e}"}
+    return out
+
+
 def _portfolio_summary(base: dict) -> dict:
     analyses = base.get("analyses") or []
     total_pl = sum(a["pl_jpy"] for a in analyses if a.get("pl_jpy") is not None)
@@ -334,6 +380,7 @@ def build_portfolio_briefing(
     include_context: bool = True,
     include_reconciliation: bool = True,
     capture_narrative: bool = True,
+    store_snapshot: bool = True,
 ) -> dict:
     """保有全体のブリーフィングパックを組み立てる（週次レポート用）。"""
     if config is None:
@@ -376,6 +423,35 @@ def build_portfolio_briefing(
         warnings.append(
             "残高の独立検証ができていません（模型の生成元と同じデータを見ています）。")
 
+    # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
+    # holdings / portfolio が確定した後に計算する。
+    falsification = _safe_falsification(holdings)
+    pack_like = {
+        "meta": {"as_of": today},
+        "portfolio": _portfolio_summary(base),
+        "holdings": holdings,
+        "reconciliation": reconciliation,
+    }
+    diff_bundle = _safe_diff(pack_like, store_snapshot)
+
+    assessment = None
+    try:
+        from src.core.portfolio.report_diff import assess_information
+
+        assessment = assess_information(
+            diff_bundle["diff"], diff_bundle.get("cumulative"),
+            falsified=falsification.get("falsified"),
+            falsification=falsification,
+            reconciliation=reconciliation,
+        )
+    except Exception:
+        assessment = None
+
+    if falsification.get("falsified"):
+        warnings.append(
+            f"反証条件が成立した保有が {len(falsification['falsified'])}件あります。"
+            "価格ではなく信念が変わった週です。")
+
     return {
         "pack_version": PACK_VERSION,
         "mode": "portfolio",
@@ -388,6 +464,10 @@ def build_portfolio_briefing(
             "warnings": warnings,
         },
         "reconciliation": reconciliation,
+        "falsification": falsification,
+        "week_diff": diff_bundle.get("diff"),
+        "cumulative_diff": diff_bundle.get("cumulative"),
+        "information": assessment,
         "narrative": narrative,
         "portfolio": _portfolio_summary(base),
         "holdings": holdings,
