@@ -251,6 +251,67 @@ def _forward_schedule(moomoo: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# 三点照合 / 物語量スナップショット (土曜設計書 提案1 / 提案7)
+# ---------------------------------------------------------------------------
+
+
+def _safe_reconciliation(config: dict, base: dict, include_moomoo: bool) -> dict:
+    """照合はレポートの第1セクション。失敗しても**黙って成功にしない**。"""
+    try:
+        from src.core.portfolio.reconciliation import run_reconciliation
+
+        sources = None if include_moomoo else ["rakuten_csv"]
+        return run_reconciliation(config, report_data=base, sources=sources,
+                                  autostart_opend=include_moomoo)
+    except Exception as e:
+        return {
+            "status": "unreconciled", "blocking": True, "reconcilable": False,
+            "independently_verified": False,
+            "counts": {}, "diffs": [], "ghosts": [], "unrecorded": [],
+            "unverified": [], "orphans": [], "sources": [],
+            "messages": [f"⛔ 照合の実行自体に失敗しました: {type(e).__name__}: {e}"],
+        }
+
+
+def _safe_narrative(holdings: list[dict], capture: bool) -> dict:
+    """物語量スナップショットを記録し、混雑度を添える。
+
+    **記録は遡れない**（設計書 提案7-⑩）ので、分析が未完成でも記録だけは毎週回す。
+    ネットワークが死んでいても週次レポート本体は止めない。
+    """
+    out: dict = {"captured": None, "crowding": {}, "note": None}
+    try:
+        from src.core.research import narrative as nv
+    except Exception:
+        return out
+
+    if capture:
+        try:
+            out["captured"] = nv.capture_many(holdings, occasion="weekly")
+        except Exception as e:
+            out["captured"] = {"captured": 0, "attempted": len(holdings or []),
+                               "error": f"{type(e).__name__}"}
+
+    for h in holdings or []:
+        sym, name = h.get("symbol"), h.get("name")
+        if not sym and not name:
+            continue
+        try:
+            c = nv.crowding(sym, name)
+        except Exception:
+            continue
+        out["crowding"][sym or f"name:{name}"] = c
+
+    ready = [c for c in out["crowding"].values() if c.get("available")]
+    out["note"] = (
+        "混雑度は記録開始以降しか測れません。基準が揃うまで分析は保留されます。"
+        if not ready else
+        "混雑度は『テーゼがまだ少数派か』の指標であり、単独で売り推奨を作りません。"
+    )
+    return out
+
+
 def _portfolio_summary(base: dict) -> dict:
     analyses = base.get("analyses") or []
     total_pl = sum(a["pl_jpy"] for a in analyses if a.get("pl_jpy") is not None)
@@ -271,6 +332,8 @@ def build_portfolio_briefing(
     monthly_contribution: float = 50000.0,
     include_moomoo: bool = True,
     include_context: bool = True,
+    include_reconciliation: bool = True,
+    capture_narrative: bool = True,
 ) -> dict:
     """保有全体のブリーフィングパックを組み立てる（週次レポート用）。"""
     if config is None:
@@ -295,11 +358,23 @@ def build_portfolio_briefing(
         for a in analyses
     ]
 
+    # 照合は分析より先。ここが通らないと下流の数値は全部条件付きになる。
+    reconciliation = (_safe_reconciliation(config, base, include_moomoo)
+                      if include_reconciliation else None)
+    narrative = _safe_narrative(holdings, capture_narrative)
+
     warnings: list[str] = []
     if not news.get("available"):
         warnings.append("ニュース/指数が取得できませんでした（材料なしではなく取得不可）。")
     if not moomoo:
         warnings.append("moomoo インサイトは無効/未起動（決算・配当・アナリスト日程は限定的）。")
+    if reconciliation and reconciliation.get("blocking"):
+        warnings.append(
+            "三点照合が通っていません。以降の全数値は**未照合**として扱ってください"
+            "（幽霊ポジションがあると、存在しない資産のリスクを計算している状態になります）。")
+    if reconciliation and not reconciliation.get("independently_verified", True):
+        warnings.append(
+            "残高の独立検証ができていません（模型の生成元と同じデータを見ています）。")
 
     return {
         "pack_version": PACK_VERSION,
@@ -312,6 +387,8 @@ def build_portfolio_briefing(
             "fx_rate": base.get("fx_rate"),
             "warnings": warnings,
         },
+        "reconciliation": reconciliation,
+        "narrative": narrative,
         "portfolio": _portfolio_summary(base),
         "holdings": holdings,
         "indices": news.get("index_watch") or [],
@@ -331,6 +408,7 @@ def build_symbol_briefing(
     symbol: str,
     include_moomoo: bool = True,
     include_context: bool = True,
+    capture_narrative: bool = True,
 ) -> dict:
     """単一銘柄＋競合＋指数のブリーフィングパック（個別質問「常に全力」用）。
 
@@ -371,6 +449,11 @@ def build_symbol_briefing(
     moomoo = _safe_moomoo([symbol]) if include_moomoo else {}
     prior_context = _safe_context(f"{symbol} の分析") if include_context else ""
 
+    # 物語量: 個別質問のたびに1点記録しておく。後から遡れないため。
+    narrative = _safe_narrative(
+        [{"symbol": symbol, "name": (detail or info or {}).get("name")}],
+        capture_narrative)
+
     # 保有チェック
     held = None
     try:
@@ -399,6 +482,7 @@ def build_symbol_briefing(
         )} if detail else (info or {}),
         "technicals": _compact_technicals(technicals),
         "wow_delta": wow,
+        "narrative": narrative,
         "competitors": competitors,
         "indices": news.get("index_watch") or [],
         "news": (news.get("holding_news") or {}).get(symbol) or [],

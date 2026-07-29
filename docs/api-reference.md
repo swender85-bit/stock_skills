@@ -337,6 +337,22 @@ What-If portfolio simulation (KIK-376, KIK-451).
 - `project_portfolio(positions: list[dict], cash_value: float=0.0, monthly_contribution: float=0.0) -> dict` — PF蜈ｨ菴薙�ｮ遏ｭ譛�/荳ｭ譛�/髟ｷ譛溘�ｮ謗ｨ遘ｻ莠域ｸｬ縲�
 - `drawdown_scenario(positions: list[dict], underlying_drop_pct: float, cash_value: float=0.0) -> dict` — 蜴溯ｳ�逕｣縺梧欠螳�%荳玖誠縺励◆縺ｨ縺阪�ｮPF隧穂ｾ｡鬘�(繝ｬ繝舌Ξ繝�繧ｸ蛟咲紫繧貞渚譏).
 
+### src.core.portfolio.reconciliation
+
+荳臥せ辣ｧ蜷� 窶� 讓｡蝙九�ｻ螳溷惠繝ｻ諢丞峙縺ｮ騾ｱ谺｡遯∝粋 (蝨滓屆險ｭ險域嶌 謠先｡�1)縲�
+
+- `normalize_symbol(symbol: Any) -> str` — 辣ｧ蜷医く繝ｼ逕ｨ縺ｮ繧ｷ繝ｳ繝懊Ν豁｣隕丞喧縲�
+- `normalize_name(name: Any) -> str` — 謚穂ｿ｡縺ｪ縺ｩ縲√す繝ｳ繝懊Ν縺檎┌縺�驫俶氛縺ｮ蜷悟ｮ壹く繝ｼ縲�
+- `position_key(pos: dict) -> str` — 繝昴ず繧ｷ繝ｧ繝ｳ縺ｮ蜷悟ｮ壹く繝ｼ縲ょ哨蠎ｧ蛹ｺ蛻�縺ｯ**蜷ｫ繧√↑縺�**縲�
+- `market_of(pos: dict) -> str` — 縺薙�ｮ繝昴ず繧ｷ繝ｧ繝ｳ縺後←縺ｮ蟶ょｴ縺具ｼ�scope 蛻､螳夂畑�ｼ峨�
+- `aggregate(positions: list[dict]) -> dict[str, dict]` — 蜷御ｸ驫俶氛�ｼ郁､�謨ｰ蜿｣蠎ｧ�ｼ峨ｒ1縺､縺ｫ譚溘�ｭ繧九�
+- `classify_quantity_diff(model_shares: Optional[float], broker_shares: Optional[float], value_per_share_jpy: Optional[float]=None, share_tolerance: float=..., value_tolerance_jpy: float=...) -> dict` — 謨ｰ驥丞ｷｮ蛻�繧貞��鬘槭☆繧九�
+- `reconcile(model_positions: list[dict], broker_snapshots: list[dict], *, values_jpy: Optional[dict[str, float]]=None, total_jpy: Optional[float]=None, share_tolerance: float=..., value_tolerance_jpy: float=..., check_intent: bool=True) -> dict` — 荳臥せ辣ｧ蜷医ｒ螳溯｡後☆繧九�
+- `orphan_burden(orphans: list[dict]) -> Optional[float]` — 蟄､蜈舌�昴ず繧ｷ繝ｧ繝ｳ縺瑚ｩ穂ｾ｡鬘阪↓蜊繧√ｋ豈皮紫�ｼ�%�ｼ峨�
+- `apply_corporate_actions(config: dict, result: dict) -> tuple[dict, list[str]]` — 蛻�蜑ｲ/菴ｵ蜷医→蛻､螳壹＆繧後◆蟾ｮ蛻�縺縺第ｨ｡蝙九�ｮ譬ｪ謨ｰ繧定｣懈ｭ｣縺吶ｋ縲�
+- `run_reconciliation(holdings_config: Optional[dict]=None, *, report_data: Optional[dict]=None, sources: Optional[list[str]]=None, csv_path: Optional[str]=None, autostart_opend: bool=True, check_intent: bool=True) -> dict` — 險ｭ螳壹�ｮ隱ｭ縺ｿ霎ｼ縺ｿ縺九ｉ繝悶Ο繝ｼ繧ｫ繝ｼ蜿門ｾ励�ｻ辣ｧ蜷医∪縺ｧ繧�1譛ｬ縺ｧ陦後≧縲�
+- `days_since(iso_date: Optional[str]) -> Optional[int]`
+
 ### src.core.portfolio.simulator
 
 Portfolio compound interest simulation engine (KIK-366).
@@ -480,8 +496,8 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕滓�� 窶� Claude 縺ｮ豺ｱ謗倥ｊ synthesis 縺ｫ貂｡縺吶悟�ｨ譚先侭縲阪ｒ1縺､縺ｫ譚溘�ｭ繧句ｱ､縲�
 
 - `week_over_week_delta(symbol: str, current: dict, prior_index: dict[str, list[dict]], today: Optional[str]=None) -> Optional[dict]` — 1驫俶氛縺ｮ縲悟燕蝗槭せ繝翫ャ繝励す繝ｧ繝�繝医°繧峨�ｮ螟牙喧縲阪ｒ霑斐☆縲ら┌縺代ｌ縺ｰ None縲�
-- `build_portfolio_briefing(config: Optional[dict]=None, rss_snapshot: Optional[dict]=None, monthly_contribution: float=50000.0, include_moomoo: bool=True, include_context: bool=True) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ繧堤ｵ�縺ｿ遶九※繧具ｼ磯ｱ谺｡繝ｬ繝昴�ｼ繝育畑�ｼ峨�
-- `build_symbol_briefing(symbol: str, include_moomoo: bool=True, include_context: bool=True) -> dict` — 蜊倅ｸ驫俶氛�ｼ狗ｫｶ蜷茨ｼ区欠謨ｰ縺ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ�ｼ亥句挨雉ｪ蝠上悟ｸｸ縺ｫ蜈ｨ蜉帙咲畑�ｼ峨�
+- `build_portfolio_briefing(config: Optional[dict]=None, rss_snapshot: Optional[dict]=None, monthly_contribution: float=50000.0, include_moomoo: bool=True, include_context: bool=True, include_reconciliation: bool=True, capture_narrative: bool=True) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ繧堤ｵ�縺ｿ遶九※繧具ｼ磯ｱ谺｡繝ｬ繝昴�ｼ繝育畑�ｼ峨�
+- `build_symbol_briefing(symbol: str, include_moomoo: bool=True, include_context: bool=True, capture_narrative: bool=True) -> dict` — 蜊倅ｸ驫俶氛�ｼ狗ｫｶ蜷茨ｼ区欠謨ｰ縺ｮ繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ�ｼ亥句挨雉ｪ蝠上悟ｸｸ縺ｫ蜈ｨ蜉帙咲畑�ｼ峨�
 
 ### src.core.research.competitors
 
@@ -491,6 +507,23 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `peer_note(symbol: str) -> Optional[str]`
 - `fetch_peer_snapshot(symbol: str, client: Any=None) -> Optional[dict]` — 1縺､縺ｮ peer 縺ｮ逶ｴ霑代せ繝翫ャ繝励す繝ｧ繝�繝茨ｼ井ｾ｡譬ｼ繝ｻ騾ｱ髢馴ｨｰ關ｽ繝ｻ繝舌Μ繝･繧ｨ繝ｼ繧ｷ繝ｧ繝ｳ繝ｻ謌宣聞�ｼ峨�
 - `build_peer_context(symbols: list[str], client: Any=None, max_peers: int=5) -> dict[str, dict]` — 菫晄怏蜷�驫俶氛縺ｫ縺､縺�縺ｦ縲∫ｫｶ蜷医せ繝翫ャ繝励す繝ｧ繝�繝医�ｮ繝ｪ繧ｹ繝医ｒ邨�縺ｿ遶九※繧九�
+
+### src.core.research.narrative
+
+迚ｩ隱樣㍼繧ｹ繝翫ャ繝励す繝ｧ繝�繝� 窶� 繝�繝ｼ繧ｼ縺ｮ蟶悟ｰ第ｧ繧呈ｸｬ繧句悄蜿ｰ (蝨滓屆險ｭ險域嶌 謠先｡�7)縲�
+
+- `gdelt_circuit_open() -> bool`
+- `reset_circuit() -> None`
+- `fetch_volume(name: Optional[str], symbol: Optional[str], timespan: str='1w') -> dict` — GDELT 縺九ｉ逶ｴ霑代�ｮ險倅ｺ矩㍼縺ｨ繝医�ｼ繝ｳ繧貞叙繧九ょ叙繧後↑縺代ｌ縺ｰ available=False縲�
+- `fetch_volume_finnhub(symbol: Optional[str], days: int=7) -> dict` — Finnhub 縺ｮ莨∵･ｭ繝九Η繝ｼ繧ｹ莉ｶ謨ｰ縲らｱｳ蝗ｽ譬ｪ蜷代￠�ｼ域律譛ｬ譬ｪ縺ｯ辟｡譁呎棧縺ｧ髱槫ｯｾ蠢懶ｼ峨�
+- `fetch_volume_yahoo(symbol: Optional[str]) -> dict` — yfinance 縺ｮ繝九Η繝ｼ繧ｹ莉ｶ謨ｰ縲よ怙蠕後�ｮ遐ｦ縲ゆｻｶ謨ｰ縺悟ｰ代↑縺剰ｧ｣蜒丞ｺｦ縺ｯ菴弱＞縲�
+- `fetch_volume_multi(name: Optional[str], symbol: Optional[str]) -> dict` — 菴ｿ縺医ｋ繧ｽ繝ｼ繧ｹ繧帝�縺ｫ隧ｦ縺励∵怙蛻昴↓蜿悶ｌ縺溘ｂ縺ｮ繧定ｿ斐☆縲�
+- `fetch_coverage(symbol: Optional[str]) -> dict` — 繧ｫ繝舌�ｼ縺励※縺�繧九い繝翫Μ繧ｹ繝域焚縲ょ｢怜刈縺ｯ豺ｷ髮代�ｮ莉｣逅�謖�讓呻ｼ郁ｨｭ險域嶌 謠先｡�7-竭｣�ｼ峨�
+- `capture(symbol: Optional[str], name: Optional[str]=None, *, occasion: str='weekly', store: bool=True, base_dir: str=DEFAULT_STORE_DIR) -> dict` — 1驫俶氛縺ｮ迚ｩ隱樣㍼繧ｹ繝翫ャ繝励す繝ｧ繝�繝医ｒ蜿悶ｊ縲∬ｿｽ險倅ｿ晏ｭ倥☆繧九�
+- `append_snapshot(snap: dict, base_dir: str=DEFAULT_STORE_DIR) -> Optional[Path]` — 霑ｽ險伜ｰら畑縲る℃蜴ｻ縺ｮ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医�ｯ邨ｶ蟇ｾ縺ｫ譖ｸ縺肴鋤縺医↑縺�縲�
+- `load_snapshots(symbol: Optional[str], name: Optional[str]=None, base_dir: str=DEFAULT_STORE_DIR) -> list[dict]`
+- `capture_many(holdings: list[dict], occasion: str='weekly', base_dir: str=DEFAULT_STORE_DIR) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医ｒ蜿悶ｋ�ｼ磯ｱ谺｡縺ｮ蜈･蜿｣�ｼ峨�
+- `crowding(symbol: Optional[str], name: Optional[str]=None, base_dir: str=DEFAULT_STORE_DIR) -> dict` — 繝�繝ｼ繧ｼ險倬鹸譎らせ縺ｫ蟇ｾ縺吶ｋ迴ｾ蝨ｨ縺ｮ迚ｩ隱樣㍼縺ｮ蛟咲紫縲�
 
 ### src.core.research.outcome_tracker
 
@@ -798,6 +831,36 @@ Value trap detection (extracted from health_check.py, KIK-392).
 - `detect_value_trap(stock_detail: dict) -> dict` — Detect value trap: stock appears cheap but fundamentals are deteriorating.
 
 ## Data Layer
+
+### src.data.brokers.__init__
+
+繝悶Ο繝ｼ繧ｫ繝ｼ謚ｽ雎｡螻､ 窶� moomoo / 讌ｽ螟ｩCSV / 謇句虚 繧貞酔荳蠖｢縺ｧ謇ｱ縺� (蝨滓屆險ｭ險域嶌 謠先｡�1)縲�
+
+- `collect_snapshots(sources: Optional[list[str]]=None, holdings_config_path: str=..., csv_path: Optional[str]=None, autostart_opend: bool=True) -> list[dict]` — 謖�螳壹た繝ｼ繧ｹ縺ｮ螳溷惠谿矩ｫ倥せ繝翫ャ繝励す繝ｧ繝�繝医ｒ髮�繧√ｋ縲�
+- `merged_scope(snapshots: list[dict]) -> set[str]` — 蜿門ｾ�**謌仙粥縺励◆**繧ｽ繝ｼ繧ｹ縺悟ｮ滄圀縺ｫ繧ｫ繝舌�ｼ縺励※縺�繧句ｸょｴ縺ｮ髮�蜷医�
+- `is_reconcilable(snapshots: list[dict]) -> bool` — 辣ｧ蜷医〒縺阪ｋ迥ｶ諷九°�ｼ域�仙粥縺励◆繧ｽ繝ｼ繧ｹ縺�1縺､莉･荳翫≠繧九°�ｼ峨�
+- `env_flag(name: str, default: bool=False) -> bool`
+
+### src.data.brokers.base
+
+繝悶Ο繝ｼ繧ｫ繝ｼ謚ｽ雎｡螻､ 窶� 縲悟ｮ溷惠谿矩ｫ倥阪�ｮ蜈ｱ騾壹う繝ｳ繧ｿ繝輔ぉ繝ｼ繧ｹ (蝨滓屆險ｭ險域嶌 謠先｡�1)縲�
+
+- `make_position(symbol: Optional[str], shares: Optional[float], *, name: Optional[str]=None, account: Optional[str]=None, cost_price: Optional[float]=None, currency: Optional[str]=None, market_value: Optional[float]=None, market: Optional[str]=None, raw: Optional[dict]=None) -> dict` — 1繝昴ず繧ｷ繝ｧ繝ｳ縺ｮ豁｣隕丞ｽ｢縲�
+- `make_snapshot(source: str, *, available: bool, positions: Optional[list[dict]]=None, cash: Optional[list[dict]]=None, as_of: Any=None, scope: Optional[list[str]]=None, error: Optional[str]=None, max_age_hours: float=..., detail: Optional[dict]=None) -> dict` — 繝悶Ο繝ｼ繧ｫ繝ｼ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医�ｮ豁｣隕丞ｽ｢縲�
+- `snapshot_summary(snap: dict) -> str` — 莠ｺ髢薙′隱ｭ繧1陦後し繝槭Μ縲ゅΞ繝昴�ｼ繝医�ｮ譛ｪ辣ｧ蜷医ヵ繝ｩ繧ｰ陦ｨ遉ｺ縺ｫ菴ｿ縺�縲�
+
+### src.data.brokers.moomoo_broker
+
+moomoo(OpenD) 逕ｱ譚･縺ｮ螳溷惠谿矩ｫ倥�ｻ邏�螳壼ｱ･豁ｴ (蝨滓屆險ｭ險域嶌 謠先｡�1 / 謠先｡�5)縲�
+
+- `fetch(autostart: bool=True) -> dict` — moomoo 縺ｮ邀ｳ蝗ｽ譬ｪ螳溷惠谿矩ｫ倥ｒ霑斐☆縲ょ叙繧後↑縺代ｌ縺ｰ available=False縲�
+- `fetch_executions(days: int=90) -> dict` — 邏�螳壼ｱ･豁ｴ�ｼ域署譯�5 蝓ｷ陦檎屮譟ｻ縺ｮ蜈･蜉幢ｼ峨ょ叙繧後↑縺代ｌ縺ｰ available=False縲�
+
+### src.data.brokers.rakuten_csv_broker
+
+讌ｽ螟ｩ險ｼ蛻ｸCSV逕ｱ譚･縺ｮ螳溷惠谿矩ｫ� (蝨滓屆險ｭ險域嶌 謠先｡�1)縲�
+
+- `fetch(holdings_config_path: str | Path=..., csv_path: Optional[str | Path]=None, prefer_csv: bool=True) -> dict` — 讌ｽ螟ｩ縺ｮ螳溷惠谿矩ｫ倥せ繝翫ャ繝励す繝ｧ繝�繝医ｒ霑斐☆縲�
 
 ### src.data.context.auto_context
 

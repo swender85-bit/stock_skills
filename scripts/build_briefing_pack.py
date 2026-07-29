@@ -82,6 +82,10 @@ def main() -> int:
     parser.add_argument("--stdout", action="store_true", help="保存せず標準出力へ")
     parser.add_argument("--no-moomoo", action="store_true")
     parser.add_argument("--no-context", action="store_true")
+    parser.add_argument("--no-reconcile", action="store_true",
+                        help="三点照合を省く（照合前に分析しない原則に反するので通常は使わない）")
+    parser.add_argument("--no-narrative", action="store_true",
+                        help="物語量スナップショットの記録を省く（記録は遡れないので非推奨）")
     parser.add_argument("--monthly-contribution", type=float, default=50000.0)
     args = parser.parse_args()
 
@@ -93,6 +97,7 @@ def main() -> int:
             args.symbol,
             include_moomoo=not args.no_moomoo,
             include_context=not args.no_context,
+            capture_narrative=not args.no_narrative,
         )
         name = f"{args.symbol.replace('.', '_')}_{date.today():%Y%m%d}.json"
     else:
@@ -107,6 +112,8 @@ def main() -> int:
             monthly_contribution=args.monthly_contribution,
             include_moomoo=not args.no_moomoo,
             include_context=not args.no_context,
+            include_reconciliation=not args.no_reconcile,
+            capture_narrative=not args.no_narrative,
         )
         name = f"PF_{date.today():%Y%m%d}.json"
 

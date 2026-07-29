@@ -51,6 +51,7 @@ from portfolio_commands.what_if import cmd_what_if as _cmd_what_if_inner
 from portfolio_commands.backtest import cmd_backtest
 from portfolio_commands.review import cmd_review
 from portfolio_commands.adjust import cmd_adjust
+from portfolio_commands.reconcile import cmd_reconcile
 
 # ---------------------------------------------------------------------------
 # Re-export HAS_* flags for backward compatibility (tests may override these)
@@ -287,6 +288,23 @@ def main():
     )
 
     # backtest (KIK-368)
+    # 三点照合（模型 / 実在 / 意図）— 土曜レポート第1セクション
+    rec_parser = subparsers.add_parser(
+        "reconcile", help="三点照合（口座の実残高と模型を突合し、孤児/幽霊を検出）")
+    rec_parser.add_argument("--holdings-config", default="config/weekly_holdings.yaml",
+                            help="模型（保有定義YAML）")
+    rec_parser.add_argument("--rakuten-csv", default=None,
+                            help="照合に使う楽天CSV（未指定なら Downloads の最新）")
+    rec_parser.add_argument("--no-prices", action="store_true",
+                            help="価格取得を省く（評価額・比率は出ない）")
+    rec_parser.add_argument("--apply-corporate-actions", action="store_true",
+                            help="分割/併合と判定された差分だけ模型に反映する")
+    rec_parser.add_argument("--no-opend", action="store_true",
+                            help="moomoo OpenD を自動起動しない")
+    rec_parser.add_argument("--source", action="append", default=None,
+                            help="使うブローカーソース（複数可: rakuten_csv / moomoo）")
+    rec_parser.add_argument("--json", action="store_true", help="JSON で出力")
+
     backtest_parser = subparsers.add_parser("backtest", help="スクリーニング履歴のバックテスト")
     backtest_parser.add_argument(
         "--preset", default=None,
@@ -375,6 +393,16 @@ def main():
             csv_path=csv_path,
             add_str=getattr(args, "add", None),
             remove_str=getattr(args, "remove", None),
+        )
+    elif args.command == "reconcile":
+        cmd_reconcile(
+            holdings_config_path=args.holdings_config,
+            csv_path=args.rakuten_csv,
+            with_prices=not args.no_prices,
+            apply_ca=args.apply_corporate_actions,
+            as_json=args.json,
+            sources=args.source,
+            no_opend=args.no_opend,
         )
     elif args.command == "backtest":
         cmd_backtest(
