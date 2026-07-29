@@ -394,6 +394,24 @@ Small-cap classification and allocation rules (KIK-438/574).
 - `classify_market_cap(market_cap: float | None, region_code: str) -> str` — Classify stock size from market cap and region code.
 - `check_small_cap_allocation(small_cap_weight: float) -> dict` — Check portfolio-level small-cap allocation.
 
+### src.core.portfolio.tax
+
+謇句叙繧顔ｿｻ險ｳ螻､ 窶� 蛻､譁ｭ蜊倅ｽ阪ｒ遞主ｼ募ｾ後↓螟峨∴繧� (蝨滓屆險ｭ險域嶌 謠先｡�3)縲�
+
+- `load_tax_config(path: str=DEFAULT_CONFIG_PATH, use_cache: bool=True) -> dict` — 遞主宛險ｭ螳壹ｒ隱ｭ繧縲りｪｭ繧√↑縺代ｌ縺ｰ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縺励∝ｿ�縺夊ｭｦ蜻翫ｒ豺ｻ縺医ｋ縲�
+- `reset_cache() -> None`
+- `account_kind(account: Optional[str], cfg: Optional[dict]=None) -> dict` — 蜿｣蠎ｧ蜷阪°繧芽ｪｲ遞主玄蛻�繧貞ｼ輔￥縲よ悴遏･縺ｮ蜿｣蠎ｧ縺ｯ**隱ｲ遞主哨蠎ｧ縺ｨ縺励※謇ｱ縺�**�ｼ井ｿ晏ｮ亥�ｴ�ｼ峨�
+- `is_tax_free(account: Optional[str], cfg: Optional[dict]=None) -> bool`
+- `capital_gains_tax(gain: Optional[float], account: Optional[str]=None, cfg: Optional[dict]=None) -> dict` — 隴ｲ貂｡逶翫↓縺九°繧狗ｨ朱｡阪�
+- `sell_proceeds(shares_sold: float, price: float, cost_price: float, account: Optional[str]=None, *, fx_rate: float=1.0, currency: str='JPY', cfg: Optional[dict]=None) -> dict` — 螢ｲ蜊ｴ縺ｮ謇句叙繧翫ｒ險育ｮ励☆繧具ｼ育ｨ弱�ｻ謇区焚譁吶�ｻ轤ｺ譖ｿ繧ｹ繝励Ξ繝�繝画而髯､蠕鯉ｼ峨�
+- `trading_fee(gross_local: float, currency: str, cfg: Optional[dict]=None) -> float`
+- `fx_spread_cost(gross_local: float, currency: str, cfg: Optional[dict]=None) -> float` — 轤ｺ譖ｿ繧ｹ繝励Ξ繝�繝峨�ｮ螳滄｡搾ｼ育樟蝨ｰ騾夊ｲｨ蟒ｺ縺ｦ�ｼ峨ら援驕灘��縲�
+- `switching_hurdle(shares: float, price: float, cost_price: float, account: Optional[str]=None, *, fx_rate: float=1.0, currency: str='JPY', buy_fee_rate: Optional[float]=None, cfg: Optional[dict]=None) -> dict` — 荵励ｊ謠帙∴蜈医′荳雁屓繧峨↑縺代ｌ縺ｰ縺ｪ繧峨↑縺�邇��ｼ�%�ｼ峨�
+- `evaluate_switch(expected_edge_pct: Optional[float], hurdle: dict) -> dict` — 譛溷ｾ�蜆ｪ菴阪→繝上�ｼ繝峨Ν繧堤ｪ√″蜷医ｏ縺帙�**蜊ｴ荳九☆縺ｹ縺阪°縺ｩ縺�縺�**繧定ｿ斐☆縲�
+- `loss_harvest_value(unrealized_loss_jpy: Optional[float], realized_gain_ytd_jpy: Optional[float], account: Optional[str]=None, cfg: Optional[dict]=None) -> dict` — 蜷ｫ縺ｿ謳阪ｒ螳溽樟縺励◆蝣ｴ蜷医�ｮ遽遞朱｡阪�**螢ｲ蜊ｴ謗ｨ螂ｨ縺ｯ逕滓�舌＠縺ｪ縺�縲�**
+- `nisa_state(used_growth_jpy: float=0.0, used_tsumitate_jpy: float=0.0, today: Optional[date]=None, cfg: Optional[dict]=None) -> dict` — NISA 縺ｮ谿区棧縺ｨ縲∝ｹｴ蜀�縺ｫ豸域ｻ�縺吶ｋ隕玖ｾｼ縺ｿ縲�
+- `nisa_suitability(expected_return_pct: Optional[float], dividend_yield_pct: Optional[float], holding_years: Optional[float], cfg: Optional[dict]=None) -> dict` — NISA譫繧剃ｸ弱∴繧倶ｾ｡蛟､縺ｮ鬮倥＆縲�
+
 ### src.core.portfolio.weekly
 
 騾ｱ谺｡繝昴�ｼ繝医ヵ繧ｩ繝ｪ繧ｪ蛻�譫舌Ξ繝昴�ｼ繝医�ｮ邨�縺ｿ遶九※.
