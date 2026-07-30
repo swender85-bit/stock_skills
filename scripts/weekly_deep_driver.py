@@ -181,6 +181,7 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 "cumulative_diff": pack.get("cumulative_diff"),
                 "week_diff": {"folded_count": len(
                     (pack.get("week_diff") or {}).get("folded") or [])},
+                "execution_audit": pack.get("execution_audit"),
                 "prior_context": pack.get("prior_context")}
 
     # --- 機会セクション（銘柄別・過熱）は従来のスライスを流用 ---

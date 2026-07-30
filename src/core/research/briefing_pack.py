@@ -331,6 +331,21 @@ def _safe_forward(holdings: list[dict], moomoo: dict, indices: list[dict],
                 "errors": [f"前方イベントの構築に失敗: {type(e).__name__}: {e}"]}
 
 
+def _safe_execution_audit(days: int = 90) -> dict:
+    """執行監査（提案5）。判断も約定も取れないのが通常なので、静かに縮退する。
+
+    ここが空でも「精度が良い」ではなく**「測れていない」**。
+    """
+    try:
+        from src.core.portfolio.execution_audit import build_execution_audit
+
+        return build_execution_audit(days=days)
+    except Exception as e:
+        return {"survival": {"available": False,
+                             "reason": f"{type(e).__name__}: {e}"},
+                "errors": [f"執行監査を実行できません: {type(e).__name__}"]}
+
+
 def _prior_calendar() -> Optional[dict]:
     """前週スナップショットに保存された翌週カレンダー。
 
@@ -565,6 +580,7 @@ def build_portfolio_briefing(
         "falsification": falsification,
         "forward": forward,
         "constraints": constraints,
+        "execution_audit": _safe_execution_audit(),
         "week_diff": diff_bundle.get("diff"),
         "cumulative_diff": diff_bundle.get("cumulative"),
         "information": assessment,
