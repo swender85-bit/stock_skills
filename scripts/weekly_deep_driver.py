@@ -127,7 +127,63 @@ def group_holdings(pack: dict) -> list[tuple[str, list[dict]]]:
 def slice_pack(pack: dict, section: dict) -> dict:
     """節が必要とする材料だけを抜き出す。"""
     kind = section["kind"]
-    meta = {"meta": pack.get("meta"), "portfolio": pack.get("portfolio")}
+    # 照合の状態は**全節に渡す**。未照合のまま数値を確定値として語らせないため。
+    meta = {
+        "meta": pack.get("meta"),
+        "portfolio": pack.get("portfolio"),
+        "reconciliation_status": _rec_status(pack),
+        "information": pack.get("information"),
+    }
+
+    # --- 土曜設計書 第3章 の固定骨格 ---
+
+    if kind == "verdict":
+        return {**meta,
+                "week_diff": pack.get("week_diff"),
+                "cumulative_diff": pack.get("cumulative_diff"),
+                "reconciliation": pack.get("reconciliation"),
+                "falsification": pack.get("falsification"),
+                "forward_actionable": (pack.get("forward") or {}).get("actionable")}
+
+    if kind == "reconcile":
+        return {**meta, "reconciliation": pack.get("reconciliation")}
+
+    if kind == "belief":
+        return {**meta,
+                "falsification": pack.get("falsification"),
+                "holdings_overview": [_slim_holding(h)
+                                      for h in pack.get("holdings") or []]}
+
+    if kind == "forward":
+        return {**meta,
+                "forward": pack.get("forward"),
+                "moomoo": pack.get("moomoo"),
+                "indices": pack.get("indices"),
+                "holdings_overview": [_slim_holding(h)
+                                      for h in pack.get("holdings") or []]}
+
+    if kind == "constraints":
+        return {**meta,
+                "constraints": pack.get("constraints"),
+                "positions_assumptions": pack.get("positions_assumptions"),
+                "holdings_overview": [_slim_holding(h)
+                                      for h in pack.get("holdings") or []]}
+
+    if kind == "decide":
+        # 事前決定は「これまでに書いた本文」から導く。政策の材料だけ渡す。
+        return {**meta,
+                "forward": pack.get("forward"),
+                "constraints": pack.get("constraints"),
+                "falsification": pack.get("falsification")}
+
+    if kind == "audit":
+        return {**meta,
+                "cumulative_diff": pack.get("cumulative_diff"),
+                "week_diff": {"folded_count": len(
+                    (pack.get("week_diff") or {}).get("folded") or [])},
+                "prior_context": pack.get("prior_context")}
+
+    # --- 機会セクション（銘柄別・過熱）は従来のスライスを流用 ---
 
     if kind == "macro":
         return {**meta,
@@ -149,6 +205,7 @@ def slice_pack(pack: dict, section: dict) -> dict:
         key = section["key"]
         sym = section.get("symbol")
         rows = [h for h in pack.get("holdings") or [] if holding_key(h) == key]
+        cal = (pack.get("forward") or {}).get("calendar") or {}
         return {**meta,
                 "holding_rows": rows,
                 "aggregate": _aggregate_rows(key, rows),
@@ -156,6 +213,13 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 "news": (pack.get("holding_news") or {}).get(sym) or [],
                 "forward_schedule": [e for e in pack.get("forward_schedule") or []
                                      if not e.get("symbol") or e.get("symbol") == sym],
+                # 翌週の確定イベント（提案4）はこの銘柄の分だけ渡す
+                "next_week_events": [
+                    e for e in (cal.get("events") or []) + (cal.get("folded") or [])
+                    if e.get("symbol") == sym],
+                # 物語混雑度（提案7）— 「上がっているが持つ理由がない」の判定材料
+                "crowding": ((pack.get("narrative") or {}).get("crowding") or {}).get(
+                    sym or f"name:{rows[0].get('name') if rows else ''}"),
                 "prior_context": pack.get("prior_context")}
 
     if kind == "heat":
@@ -190,57 +254,138 @@ def slice_pack(pack: dict, section: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def build_sections(pack: dict) -> list[dict]:
-    """パックの保有内容に応じて節リストを組み立てる（実行順）。
+def _rec_status(pack: dict) -> dict:
+    """照合の状態を全節に渡すための最小ビュー。
 
-    エグゼクティブサマリーは**最後に書いて先頭に置く**（全節を読んでから書くため）。
+    未照合・独立検証なしのまま、下流の節が数値を確定値として語るのを防ぐ。
     """
+    rec = pack.get("reconciliation") or {}
+    return {
+        "status": rec.get("status"),
+        "blocking": rec.get("blocking"),
+        "independently_verified": rec.get("independently_verified"),
+        "messages": rec.get("messages"),
+    }
+
+
+def is_quiet_week(pack: dict) -> bool:
+    """静穏週かどうか。真ならレポートを数行で終える（提案8）。"""
+    return bool((pack.get("information") or {}).get("quiet"))
+
+
+def build_sections(pack: dict) -> list[dict]:
+    """土曜設計書 第3章の固定骨格で節リストを組み立てる（実行順）。
+
+    ```
+    0. 判定        — 情報量（静穏週かどうか）※最後に書いて先頭に置く
+    1. 照合        — 私の模型は現実と一致しているか
+    2. 信念の変化  — 反証条件に触れたテーゼはあるか
+    3. 前方イベント — 翌週に何が確定して起きるか
+    4. 制約        — 政策・税・現金・流動性・注意
+    5. 機会        — 制約内での保有の立ち位置（銘柄別・過熱横断）
+    6. 事前決定    — 翌週の条件付き政策 ← 土曜の唯一の「行動」
+    7. 監査        — 執行・模型の健全性（静穏時は折り畳み）
+    8. 前提と限界  — 系譜サマリ
+    ```
+
+    **順序は意思決定論的に固定されており、変更しない。** 機会を先に出すのは
+    自宅が燃えているかを確認する前に買い物に行くのと同じ。
+
+    静穏週（`information.quiet`）は銘柄別の節を作らず、機会は1節に畳む。
+    分量をスケジュールでなく情報量に比例させるため（提案8）。
+    """
+    quiet = is_quiet_week(pack)
+
     sections: list[dict] = [
-        {"id": "macro", "kind": "macro", "order": 20,
-         "heading": "## 1. 今週のマクロ環境と保有への波及",
-         "spec": "仕様の「### 2. 今週のマクロ環境と保有への波及」に従って書く。"},
-        {"id": "schedule", "kind": "schedule", "order": 30,
-         "heading": "## 2. 今後の日程と保有株への影響",
-         "spec": "仕様の「### 3. 今後の日程と保有株への影響」に従って書く。"},
+        {"id": "reconcile", "kind": "reconcile", "order": 20,
+         "heading": "## 1. 照合 — 模型は現実と一致しているか",
+         "spec": ("仕様の「### 1. 照合」に従って書く。"
+                  "原因不明の差分・幽霊・未記録・孤児を、材料にあるものだけ書く。"
+                  "照合できなかった銘柄は『一致』でも『幽霊』でもなく**残高不明**と書く。")},
+        {"id": "belief", "kind": "belief", "order": 30,
+         "heading": "## 2. 信念の変化 — 反証条件の点検",
+         "spec": ("仕様の「### 2. 信念の変化」に従って書く。"
+                  "価格ではなく信念の変化を見る節。反証成立は売り推奨ではなく議題。"
+                  "`unchecked` は『問題なし』ではなく『未点検』と書く。")},
+        {"id": "forward", "kind": "forward", "order": 40,
+         "heading": "## 3. 前方イベント — 翌週に確定して起きること",
+         "spec": ("仕様の「### 3. 前方イベント」に従って書く。"
+                  "**政策カバレッジの穴**を必ず書く（土曜に決めるしかない）。"
+                  "先物・ADRは予測ではなく市場の織り込み。断定しない。"
+                  "日程が取れなかった銘柄は『予定なし』ではないと明記する。")},
+        {"id": "constraints", "kind": "constraints", "order": 50,
+         "heading": "## 4. 制約 — 行動可能な空間",
+         "spec": ("仕様の「### 4. 制約」に従って書く。"
+                  "実現損益が null なら『未記録』と書き、0円と書かない。"
+                  "NISA使用額が推定なら『（推定）』と明示する。"
+                  "含み損の税務価値には必ず『損切りの推奨ではない』を添える。")},
     ]
 
-    for i, (key, rows) in enumerate(group_holdings(pack)):
-        sym = rows[0].get("symbol")
-        name = rows[0].get("name") or key
-        label = f"{name}（{sym}）" if sym else name
+    if quiet:
+        # 静穏週は銘柄別に展開しない。1節に畳んで折り畳み見出しだけ残す。
         sections.append({
-            "id": "holding_" + "".join(
-                c if c.isalnum() else "_" for c in key)[:40],
-            "kind": "holding", "key": key, "symbol": sym, "order": 40 + i,
-            "heading": f"### {label}",
-            "spec": ("仕様の「### 4. 銘柄別の深掘り」の5点（値動きと損益／前回からの変化／"
-                     "今後の日程／競合の含意／推奨アクション）を**この銘柄について**順に書く。"
-                     "見出しは渡した heading をそのまま使い、その下に本文を書く。"
-                     "同一銘柄が複数口座にある場合は `holding_rows` に全行が入っているので"
-                     "**合算(`aggregate`)で語り**、口座差は必要なときだけ触れる。"),
+            "id": "opportunity", "kind": "heat", "order": 60,
+            "heading": "## 5. 機会 — 保有の立ち位置（静穏週のため要約）",
+            "spec": ("静穏週なので**10行以内**で書く。"
+                     "過熱/売られすぎの多数決判定とPF加重RSIだけを述べ、"
+                     "銘柄別の詳細は `[折り畳み] 銘柄別の詳細 N件` と書いて省略する。"
+                     "算出できる指標が1つも無ければ『中立』ではなく『判定不能』と書く。"),
+        })
+    else:
+        for i, (key, rows) in enumerate(group_holdings(pack)):
+            sym = rows[0].get("symbol")
+            name = rows[0].get("name") or key
+            label = f"{name}（{sym}）" if sym else name
+            sections.append({
+                "id": "holding_" + "".join(
+                    c if c.isalnum() else "_" for c in key)[:40],
+                "kind": "holding", "key": key, "symbol": sym, "order": 60 + i,
+                "heading": f"### {label}",
+                "spec": ("仕様の「### 5. 機会」の6点（値動きと損益／前週からの変化／"
+                         "翌週の日程／競合の含意／物語混雑度／翌週決めるべきこと）を"
+                         "**この銘柄について**順に書く。"
+                         "見出しは渡した heading をそのまま使う。"
+                         "同一銘柄が複数口座にある場合は `holding_rows` に全行が入るので"
+                         "**合算(`aggregate`)で語り**、口座差は必要なときだけ触れる。"
+                         "**銘柄推奨を書くな。** 書くのは立ち位置と『翌週どういう条件なら"
+                         "何をするか』の材料（第0原則: 土曜は買う銘柄を答える日ではない）。"),
+            })
+        sections.append({
+            "id": "heat", "kind": "heat", "order": 79,
+            "heading": "### 過熱 / 売られすぎ 横断ビュー",
+            "spec": ("仕様の「### 5. 機会」末尾の横断ビューに従って書く。"
+                     "多数決で判定し、算出できる指標が無ければ『判定不能』と書く。"
+                     "PF加重RSIが過熱圏なら新規買い増しを戒める。"),
         })
 
     sections += [
-        {"id": "heat", "kind": "heat", "order": 60,
-         "heading": "## 4. 過熱 / 売られすぎ 横断ビュー",
-         "spec": "仕様の「### 5. 過熱 / 売られすぎ 横断ビュー」に従って書く。"},
-        {"id": "cumulative", "kind": "cumulative", "order": 70,
-         "heading": "## 5. 週次の積み重ね（累積推移）",
-         "spec": "仕様の「### 6. 週次の積み重ね」に従って書く。"},
-        {"id": "actions", "kind": "actions", "order": 80,
-         "heading": "## 6. 統合アクションプラン",
-         "spec": ("仕様の「### 7. 統合アクションプラン」に従って書く。"
-                  "材料は**これまでに書いた本文**。新しい数字を捏造せず、本文の内容から導く。"),
+        {"id": "decide", "kind": "decide", "order": 80,
+         "heading": "## 6. 事前決定 — 翌週の条件付き政策",
+         "spec": ("仕様の「### 6. 事前決定」に従って書く。**これが土曜の唯一の行動。**"
+                  "材料は**これまでに書いた本文**。政策は測定可能な条件＋失効期限必須。"
+                  "登録コマンドをそのまま貼れる形で書く。"
+                  "売買を伴う政策には税引後の損益分岐と入金代替案を添える。"
+                  "『何もしない』を明示的な決定として書いてよい。"),
          "needs_body": True},
-        {"id": "limits", "kind": "limits", "order": 90,
-         "heading": "## 7. 前提と限界 / 根拠の系譜",
+        {"id": "audit", "kind": "audit", "order": 90,
+         "heading": "## 7. 監査 — 執行と模型の健全性",
+         "spec": ("仕様の「### 7. 監査」に従って書く。"
+                  "累積差分（4週・13週）の緩慢な変化を必ず見る。"
+                  "材料が薄ければ数行で終えてよい。"),
+         "needs_body": True},
+        {"id": "limits", "kind": "limits", "order": 95,
+         "heading": "## 8. 前提と限界 / 根拠の系譜",
          "spec": "仕様の「### 8. 前提と限界 + 系譜サマリ」に従って書く。",
          "needs_body": True},
-        {"id": "summary", "kind": "summary", "order": 10,
-         "heading": "## 0. エグゼクティブサマリー",
-         "spec": ("仕様の「### 1. エグゼクティブサマリー（15行以内・最重要）」に従って書く。"
-                  "材料は**これまでに書いた本文全体**。15行以内。"
-                  "推奨アクションが無いなら「アクション不要、監視継続」と明言する。"),
+        {"id": "verdict", "kind": "verdict", "order": 10,
+         "heading": "## 0. 今週の判定",
+         "spec": ("仕様の「### 0. 今週の判定」に従って書く。"
+                  "材料は `information` と**これまでに書いた本文全体**。"
+                  "`information.quiet` が真なら『静穏週（要対応0件）』とし、"
+                  "『先週からの実質的な変化はありません。今週は何もしないことが"
+                  "正しい選択です』と明言し、点検項目数も示す。"
+                  "偽なら `information.actionable` を優先度順に番号付きで列挙する。"
+                  "**銘柄の買い推奨を書かないこと**（第0原則）。"),
          "needs_body": True},
     ]
     return sections
@@ -416,6 +561,21 @@ def _fmt(v, unit: str = "", digits: int = 0) -> str:
     return str(v)
 
 
+def _import_label(source: Any) -> str:
+    """`source:` ブロックを1行の読める形にする（dict をそのまま出さない）。"""
+    if not isinstance(source, dict):
+        return str(source or "不明")
+    kind = source.get("type") or "不明"
+    when = str(source.get("exported_at") or "")[:10]
+    name = source.get("file")
+    parts = [kind]
+    if when:
+        parts.append(when)
+    if name:
+        parts.append(str(name))
+    return " / ".join(parts)
+
+
 def build_header(pack: dict) -> str:
     meta = pack.get("meta") or {}
     pf = pack.get("portfolio") or {}
@@ -435,8 +595,31 @@ def build_header(pack: dict) -> str:
         f"（{_fmt(pf.get('pl_pct'), '%', 1)}）",
         f"- 為替: {_fmt(meta.get('fx_rate'), ' 円/USD', 2)}",
         f"- 保有データ源: {meta.get('holdings_source') or '不明'}"
-        f" / 取り込み: {meta.get('holdings_import') or '不明'}",
+        f" / 取り込み: {_import_label(meta.get('holdings_import'))}",
     ]
+    # 照合の状態はヘッダに出す。未照合のまま数値を読ませないため（提案1）。
+    rec = pack.get("reconciliation") or {}
+    if rec:
+        label = {
+            "ok": "✅ 一致", "differences_explained": "🟡 差分あり（説明済み）",
+            "differences": "🔴 要対応の差分あり", "circular": "🟡 独立検証なし",
+            "unreconciled": "⛔ 照合不能",
+        }.get(rec.get("status"), rec.get("status") or "不明")
+        counts = rec.get("counts") or {}
+        lines.append(f"- 三点照合: {label}"
+                     f"（口座 {counts.get('broker', '—')}銘柄 / "
+                     f"模型 {counts.get('model', '—')}銘柄 / "
+                     f"孤児 {counts.get('orphans', '—')}件）")
+
+    info = pack.get("information") or {}
+    if info:
+        checked = info.get("checked_count", 0)
+        # 初回は前週スナップショットが無く点検0になる。動いていないと誤読させない。
+        checked_txt = (f"点検 {checked}項目" if checked else
+                       "前週比較なし（初回 or 前週データ欠損）")
+        lines.append(f"- 今週の判定: {info.get('verdict')}"
+                     f"（要対応 {info.get('actionable_count', 0)}件 / {checked_txt}）")
+
     for w in meta.get("warnings") or []:
         lines.append(f"- ⚠️ {w}")
     lines.append("")
@@ -445,7 +628,7 @@ def build_header(pack: dict) -> str:
 
 def assemble(state: dict, out_dir: Path, pack: dict) -> str:
     body = [build_header(pack)]
-    holdings_heading_done = False
+    opportunity_heading_done = False
     for s in sorted(state["sections"], key=lambda x: x["order"]):
         if s.get("status") != "done" or not s.get("file"):
             continue
@@ -453,10 +636,13 @@ def assemble(state: dict, out_dir: Path, pack: dict) -> str:
             text = (out_dir / s["file"]).read_text(encoding="utf-8").strip()
         except Exception:
             continue
-        # 銘柄別（### 見出し）の塊に親見出しを1つだけ立てる
-        if s.get("kind") == "holding" and not holdings_heading_done:
-            body.append("## 3. 銘柄別の深掘り（保有比率順）")
-            holdings_heading_done = True
+        # 機会セクションの小見出し群（`###`）に親見出しを1つだけ立てる。
+        # 静穏週は機会が1節に畳まれて自前の `##` を持つので、ここは通らない。
+        if (s.get("kind") in ("holding", "heat")
+                and str(s.get("heading", "")).startswith("### ")
+                and not opportunity_heading_done):
+            body.append("## 5. 機会 — 保有の立ち位置（保有比率順）")
+            opportunity_heading_done = True
         body.append(text)
     return "\n\n".join(p for p in body if p) + "\n"
 

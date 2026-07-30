@@ -45,6 +45,13 @@ from src.data.yahoo_client.detail import (  # noqa: F401
 # -- Screening --
 from src.data.yahoo_client.screen import screen_stocks  # noqa: F401
 
+# -- 前方イベント（決算日・配当権利日）: 土曜設計書 提案4 --
+from src.data.yahoo_client.events import (  # noqa: F401
+    clear_event_cache,
+    get_events_for,
+    get_symbol_events,
+)
+
 # -- Price history & news --
 from src.data.yahoo_client.history import (  # noqa: F401
     get_price_history,

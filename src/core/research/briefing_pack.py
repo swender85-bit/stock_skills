@@ -313,6 +313,39 @@ def _safe_narrative(holdings: list[dict], capture: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 前方イベント脊椎 (土曜設計書 提案4)
+# ---------------------------------------------------------------------------
+
+
+def _safe_forward(holdings: list[dict], moomoo: dict, indices: list[dict],
+                  prior_calendar: Optional[dict]) -> dict:
+    """翌週の確定イベント集合。レポートの骨格そのもの。"""
+    try:
+        from src.core.risk.forward_events import build_forward_section
+
+        return build_forward_section(holdings, moomoo=moomoo, indices=indices,
+                                     prior_calendar=prior_calendar)
+    except Exception as e:
+        return {"calendar": {"events": [], "folded": [], "unavailable_symbols": []},
+                "actionable": [],
+                "errors": [f"前方イベントの構築に失敗: {type(e).__name__}: {e}"]}
+
+
+def _prior_calendar() -> Optional[dict]:
+    """前週スナップショットに保存された翌週カレンダー。
+
+    日程変更（決算日の前倒し/後ろ倒し）は前週と比べないと検出できない。
+    """
+    try:
+        from src.core.portfolio.report_diff import load_snapshots, prior_snapshot
+
+        prev = prior_snapshot(load_snapshots(), weeks_back=1)
+        return (prev or {}).get("forward_calendar")
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
 # 制約: 税・現金・入金・注意 (土曜設計書 提案3 / 提案9)
 # ---------------------------------------------------------------------------
 
@@ -481,6 +514,8 @@ def build_portfolio_briefing(
         warnings.append(
             "残高の独立検証ができていません（模型の生成元と同じデータを見ています）。")
 
+    forward = _safe_forward(holdings, moomoo, news.get("index_watch") or [],
+                            _prior_calendar())
     constraints = _safe_constraints(config, base, holdings, reconciliation)
 
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
@@ -491,6 +526,8 @@ def build_portfolio_briefing(
         "portfolio": _portfolio_summary(base),
         "holdings": holdings,
         "reconciliation": reconciliation,
+        # 来週の日程変更検出に使うので、カレンダーもスナップショットに残す
+        "forward_calendar": forward.get("calendar"),
     }
     diff_bundle = _safe_diff(pack_like, store_snapshot)
 
@@ -503,6 +540,7 @@ def build_portfolio_briefing(
             falsified=falsification.get("falsified"),
             falsification=falsification,
             reconciliation=reconciliation,
+            forward=forward,
         )
     except Exception:
         assessment = None
@@ -525,6 +563,7 @@ def build_portfolio_briefing(
         },
         "reconciliation": reconciliation,
         "falsification": falsification,
+        "forward": forward,
         "constraints": constraints,
         "week_diff": diff_bundle.get("diff"),
         "cumulative_diff": diff_bundle.get("cumulative"),

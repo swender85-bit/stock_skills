@@ -1350,6 +1350,14 @@ Stock info and detail fetching (KIK-449, KIK-531).
 - `get_multiple_stocks(symbols: list[str]) -> dict[str, Optional[dict]]` — Fetch stock info for multiple symbols with a 1-second delay between requests.
 - `get_stock_detail(symbol: str) -> Optional[dict]` — Fetch detailed stock information including financial statements.
 
+### src.data.yahoo_client.events
+
+驫俶氛縺ｮ蜑肴婿繧､繝吶Φ繝茨ｼ域ｱｺ邂玲律繝ｻ驟榊ｽ捺ｨｩ蛻ｩ譌･�ｼ牙叙蠕� (蝨滓屆險ｭ險域嶌 謠先｡�4)縲�
+
+- `clear_event_cache() -> None`
+- `get_symbol_events(symbol: str, use_cache: bool=True) -> dict` — 1驫俶氛縺ｮ豎ｺ邂嶺ｺ亥ｮ壽律繝ｻ驟榊ｽ楢誠縺｡譌･遲峨ｒ霑斐☆縲�
+- `get_events_for(symbols: list[str], use_cache: bool=True) -> dict[str, dict]` — 隍�謨ｰ驫俶氛縲�1驫俶氛縺瑚誠縺｡縺ｦ繧ゆｻ悶�ｯ霑斐☆縲�
+
 ### src.data.yahoo_client.history
 
 Price history and news fetching (KIK-449, KIK-531).

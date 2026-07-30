@@ -65,15 +65,16 @@ class TestBuildSections:
         holding_ids = [s["id"] for s in sections if s["kind"] == "holding"]
         assert holding_ids == ["holding_SOXL", "holding_2802_T"]
 
-    def test_summary_is_written_last_but_ordered_first(self, pack):
+    def test_verdict_is_written_last_but_ordered_first(self, pack):
+        """土曜設計書 第3章の骨格では、先頭の節は「今週の判定」。"""
         sections = driver.build_sections(pack)
-        assert sections[-1]["id"] == "summary"
+        assert sections[-1]["id"] == "verdict"
         assert min(s["order"] for s in sections) == sections[-1]["order"]
 
     def test_body_dependent_sections_flagged(self, pack):
         sections = driver.build_sections(pack)
         needs = {s["id"] for s in sections if s.get("needs_body")}
-        assert needs == {"actions", "limits", "summary"}
+        assert needs == {"decide", "audit", "limits", "verdict"}
 
     def test_symbol_less_fund_still_gets_a_section(self, pack):
         """ティッカーが無い投信（FANG+等）を落とさない。落とすと保有が黙って消える。"""
@@ -111,7 +112,7 @@ class TestBuildSections:
     def test_no_holdings_still_produces_sections(self):
         sections = driver.build_sections({"holdings": []})
         assert [s["id"] for s in sections if s["kind"] == "holding"] == []
-        assert any(s["id"] == "summary" for s in sections)
+        assert any(s["id"] == "verdict" for s in sections)
 
 
 class TestSlicePack:
@@ -132,15 +133,16 @@ class TestSlicePack:
         assert "AAPL" not in symbols
 
     def test_macro_slice_omits_per_holding_detail(self, pack):
-        sec = next(s for s in driver.build_sections(pack) if s["kind"] == "macro")
-        material = driver.slice_pack(pack, sec)
+        """macro スライスは骨格から外れたが、個別質問側で使うので維持する。"""
+        material = driver.slice_pack(pack, {"kind": "macro"})
         assert "indices" in material and "market_news" in material
         assert "technicals" not in material["holdings_overview"][0]
 
-    def test_actions_slice_is_meta_only(self, pack):
-        sec = next(s for s in driver.build_sections(pack) if s["id"] == "actions")
-        material = driver.slice_pack(pack, sec)
-        assert set(material) == {"meta", "portfolio"}
+    def test_unknown_kind_slice_is_meta_only(self, pack):
+        """未知の kind は meta だけを返す（材料の取り違えで捏造させない）。"""
+        material = driver.slice_pack(pack, {"kind": "unknown_kind"})
+        assert set(material) == {"meta", "portfolio", "reconciliation_status",
+                                 "information"}
 
     def test_every_section_slices_without_error(self, pack):
         for sec in driver.build_sections(pack):
@@ -195,8 +197,10 @@ class TestHeaderAndAssembly:
             {"id": "h1", "kind": "holding", "order": 40, "status": "done", "file": "d/x.md"},
             {"id": "h2", "kind": "holding", "order": 41, "status": "done", "file": "d/y.md"},
         ]}
+        state["sections"][0]["heading"] = "### x"
+        state["sections"][1]["heading"] = "### y"
         out = driver.assemble(state, tmp_path, pack)
-        assert out.count("## 3. 銘柄別の深掘り（保有比率順）") == 1
+        assert out.count("## 5. 機会 — 保有の立ち位置（保有比率順）") == 1
 
     def test_body_for_prompt_concatenates_done_only(self, tmp_path):
         (tmp_path / "x.md").write_text("済み", encoding="utf-8")
@@ -209,17 +213,21 @@ class TestHeaderAndAssembly:
 
 class TestPromptBuilding:
     def test_prompt_contains_spec_heading_and_material(self, pack):
-        sec = next(s for s in driver.build_sections(pack) if s["kind"] == "macro")
+        sec = next(s for s in driver.build_sections(pack) if s["kind"] == "forward")
         prompt = driver.build_prompt("仕様本文", sec, driver.slice_pack(pack, sec), "")
         assert "仕様本文" in prompt
         assert sec["heading"] in prompt
-        assert "FOMC据え置き" in prompt
+        # 前方イベント節には翌週カレンダーが渡る（この pack では forward が空なので
+        # キーの存在だけを確認する）
+        assert '"forward"' in prompt
 
     def test_body_included_only_when_needed(self, pack):
-        macro = next(s for s in driver.build_sections(pack) if s["kind"] == "macro")
-        actions = next(s for s in driver.build_sections(pack) if s["id"] == "actions")
-        assert "これまでに書いた本文" not in driver.build_prompt("s", macro, {}, "既存本文")
-        assert "既存本文" in driver.build_prompt("s", actions, {}, "既存本文")
+        sections = driver.build_sections(pack)
+        reconcile = next(s for s in sections if s["id"] == "reconcile")
+        decide = next(s for s in sections if s["id"] == "decide")
+        assert "これまでに書いた本文" not in driver.build_prompt(
+            "s", reconcile, {}, "既存本文")
+        assert "既存本文" in driver.build_prompt("s", decide, {}, "既存本文")
 
 
 class TestState:

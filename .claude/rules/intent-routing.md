@@ -140,6 +140,18 @@ python scripts/build_briefing_pack.py          # 保有全体パック
 ```
 
 → `.claude/prompts/weekly_deep.md` の仕様で執筆。無人週次と同じ材料・同じ執筆基準。
+**セクション順序は固定**（照合→信念→前方イベント→制約→機会→事前決定→監査）。
+詳細は `.claude/rules/weekly-report.md`。
+
+**照合だけしたいとき**（「口座と合ってる？」「保有ずれてない？」「孤児ある？」
+「幽霊ポジションは？」「なぜ持ってるか書いてない銘柄」）:
+
+```bash
+python .claude/skills/stock-portfolio/scripts/run_portfolio.py reconcile
+```
+
+⚠️ **新しい楽天CSVを落としたら、取り込む前に reconcile を実行する。**
+取り込んだ後だと模型の生成元と同一データになり、独立検証にならない（`circular`）。
 
 以下の従来ルーティングは、**deep pack で足りない特定の切り口**（定性リサーチ・
 業界/市況・ビジネスモデル）を追加で引くときに使う。
@@ -211,6 +223,7 @@ python scripts/build_briefing_pack.py          # 保有全体パック
 | **What-If**: 追加したら、買ったらどうなる、影響、シミュレーション追加 | `what-if` |
 | **パフォーマンスレビュー**: 売買成績、勝率、損益統計、何%取れた | `review` |
 | **調整アドバイス**: 何を売るべき？、どう直す？、具体的に何をすべき？、処方箋、調整プラン、どうしたらいい、アドバイス、改善して、直して、対策、手を打って、アクションプラン、次のアクション、問題点と対策 | `adjust` |
+| **三点照合**: 口座と合ってる？、保有ずれてない？、孤児ポジション、幽霊ポジション、なぜ持ってるか書いてない、取り込み漏れ | `reconcile` |
 | **売買→記録**: 買った理由を記録したい、投資理由をメモ | `buy` → `/investment-note save --type thesis` |
 | **損切り→学び**: 損切りの学びを記録、反省メモ | `sell` → `/investment-note save --type lesson` |
 

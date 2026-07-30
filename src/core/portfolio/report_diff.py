@@ -117,6 +117,8 @@ def build_snapshot(pack: dict) -> dict:
             "unrecorded": (rec.get("counts") or {}).get("unrecorded"),
         },
         "policies": _policy_snapshot(),
+        # 翌週の日程変更（決算日の前倒し/後ろ倒し）は前週と比べないと検出できない。
+        "forward_calendar": pack.get("forward_calendar"),
     }
 
 
