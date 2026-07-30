@@ -313,6 +313,64 @@ def _safe_narrative(holdings: list[dict], capture: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 制約: 税・現金・入金・注意 (土曜設計書 提案3 / 提案9)
+# ---------------------------------------------------------------------------
+
+
+def _safe_constraints(config: dict, base: dict, holdings: list[dict],
+                      reconciliation: Optional[dict]) -> dict:
+    """行動可能な空間を先に確定させる材料（第4セクション）。
+
+    設計書 第3章の順序: 制約 → 機会。逆にすると実行できない推奨を先に読ませる。
+    """
+    out: dict = {"tax_state": None, "runway_bundle": None, "attention": None,
+                 "loss_harvest": [], "errors": []}
+
+    total_jpy = base.get("total_jpy")
+    cash_jpy = base.get("cash_jpy")
+    orphans = len((reconciliation or {}).get("orphans") or [])
+
+    try:
+        from src.core.portfolio.tax import build_tax_state, loss_harvest_value
+
+        tax_state = build_tax_state(config.get("holdings") or [])
+        out["tax_state"] = tax_state
+        realized = tax_state.get("realized_gain_ytd_jpy")
+        for h in holdings or []:
+            pl = h.get("pl_jpy")
+            if isinstance(pl, (int, float)) and pl < 0:
+                lh = loss_harvest_value(pl, realized, h.get("account"))
+                lh["symbol"] = h.get("symbol")
+                lh["label"] = h.get("name")
+                out["loss_harvest"].append(lh)
+    except Exception as e:
+        out["errors"].append(f"税務状態: {type(e).__name__}: {e}")
+
+    try:
+        from src.core.portfolio.runway import (
+            attention_budget,
+            cash_purpose_check,
+            load_cashflow_config,
+            runway,
+            weekly_investable,
+        )
+
+        cfg = load_cashflow_config()
+        est = weekly_investable(None, cfg)
+        out["runway_bundle"] = {
+            "estimate": est,
+            "runway": runway(est.get("weekly_jpy"), cash_jpy=cash_jpy, cfg=cfg),
+            "cash": cash_purpose_check(cash_jpy, total_jpy, cfg),
+        }
+        # 孤児は「レビューの基準が無い＝実質監視されていない」として注意予算に効く
+        out["attention"] = attention_budget(len(holdings or []), orphans, cfg)
+    except Exception as e:
+        out["errors"].append(f"資金ランウェイ: {type(e).__name__}: {e}")
+
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 差分レポート / 信念の点検 (土曜設計書 提案8)
 # ---------------------------------------------------------------------------
 
@@ -423,6 +481,8 @@ def build_portfolio_briefing(
         warnings.append(
             "残高の独立検証ができていません（模型の生成元と同じデータを見ています）。")
 
+    constraints = _safe_constraints(config, base, holdings, reconciliation)
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     falsification = _safe_falsification(holdings)
@@ -465,6 +525,7 @@ def build_portfolio_briefing(
         },
         "reconciliation": reconciliation,
         "falsification": falsification,
+        "constraints": constraints,
         "week_diff": diff_bundle.get("diff"),
         "cumulative_diff": diff_bundle.get("cumulative"),
         "information": assessment,

@@ -410,6 +410,8 @@ Small-cap classification and allocation rules (KIK-438/574).
 - `evaluate_switch(expected_edge_pct: Optional[float], hurdle: dict) -> dict` — 譛溷ｾ�蜆ｪ菴阪→繝上�ｼ繝峨Ν繧堤ｪ√″蜷医ｏ縺帙�**蜊ｴ荳九☆縺ｹ縺阪°縺ｩ縺�縺�**繧定ｿ斐☆縲�
 - `loss_harvest_value(unrealized_loss_jpy: Optional[float], realized_gain_ytd_jpy: Optional[float], account: Optional[str]=None, cfg: Optional[dict]=None) -> dict` — 蜷ｫ縺ｿ謳阪ｒ螳溽樟縺励◆蝣ｴ蜷医�ｮ遽遞朱｡阪�**螢ｲ蜊ｴ謗ｨ螂ｨ縺ｯ逕滓�舌＠縺ｪ縺�縲�**
 - `nisa_state(used_growth_jpy: float=0.0, used_tsumitate_jpy: float=0.0, today: Optional[date]=None, cfg: Optional[dict]=None) -> dict` — NISA 縺ｮ谿区棧縺ｨ縲∝ｹｴ蜀�縺ｫ豸域ｻ�縺吶ｋ隕玖ｾｼ縺ｿ縲�
+- `nisa_used_from_holdings(holdings: list[dict], year: Optional[int]=None, cfg: Optional[dict]=None) -> dict` — 菫晄怏縺九ｉ NISA 譫縺ｮ菴ｿ逕ｨ鬘阪ｒ謗ｨ螳壹☆繧九�
+- `build_tax_state(holdings: Optional[list[dict]]=None, *, year: Optional[int]=None, realized_gain_ytd_jpy: Optional[float]=None, loss_carryforward_jpy: Optional[float]=None, cfg: Optional[dict]=None) -> dict` — 蠖灘ｹｴ縺ｮ遞主漁迥ｶ諷具ｼ亥ｮ溽樟謳咲寢繝ｻNISA谿区棧繝ｻ郢ｰ雜頑錐螟ｱ�ｼ峨ｒ邨�縺ｿ遶九※繧九�
 - `nisa_suitability(expected_return_pct: Optional[float], dividend_yield_pct: Optional[float], holding_years: Optional[float], cfg: Optional[dict]=None) -> dict` — NISA譫繧剃ｸ弱∴繧倶ｾ｡蛟､縺ｮ鬮倥＆縲�
 
 ### src.core.portfolio.weekly
@@ -1401,6 +1403,18 @@ Structure analysis and shareholder-return output formatters (KIK-447, split from
 
 - `format_structure_analysis(analysis: dict) -> str` — Format a portfolio structure analysis as a Markdown report.
 - `format_shareholder_return_analysis(data: dict) -> str` — Format portfolio shareholder return analysis as markdown.
+
+### src.output.constraint_formatter
+
+蛻ｶ邏�繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ縺ｮ蜃ｺ蜉帶紛蠖｢ 窶� 遞弱�ｻ迴ｾ驥代�ｻ蜈･驥代�ｻ豕ｨ諢� (蝨滓屆險ｭ險域嶌 謠先｡�3/9)縲�
+
+- `format_tax_state(state: dict) -> str` — 蠖灘ｹｴ縺ｮ遞主漁迥ｶ諷九→ NISA 譫縲�
+- `format_switch_evaluation(symbol: str, hurdle: dict, evaluation: Optional[dict]=None, expected_edge_pct: Optional[float]=None) -> str` — 荵励ｊ謠帙∴謠先｡医�ｮ遞主ｼ募ｾ悟�崎ｩ穂ｾ｡縲�**荵励ｊ謠帙∴謠先｡医↓縺ｯ蠢�縺壹％繧後ｒ豺ｻ縺医ｋ縲�**
+- `format_loss_harvest(items: list[dict]) -> str` — 蜷ｫ縺ｿ謳阪�ｮ遞主漁萓｡蛟､縲�**螢ｲ蜊ｴ謗ｨ螂ｨ縺ｧ縺ｯ縺ｪ縺�**縺薙→繧貞ｿ�縺壽ｷｻ縺医ｋ縲�
+- `format_runway(bundle: dict) -> str` — 迴ｾ驥代�ｻ騾ｱ谺｡謚戊ｳ�蜿ｯ閭ｽ鬘阪�ｻ繝ｩ繝ｳ繧ｦ繧ｧ繧､繝ｻ迴ｾ驥代�ｮ逶ｮ逧�縲�
+- `format_funding_options(result: dict, target_label: str='') -> str` — (a)螢ｲ蜊ｴ /(b)迴ｾ驥� /(c)蜈･驥大ｾ�縺｡ /(d)隕乗ｨ｡邵ｮ蟆� 縺ｮ豈碑ｼ�縲�
+- `format_attention(budget: dict) -> str`
+- `format_constraints(bundle: dict) -> str` — 蛻ｶ邏�繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ蜈ｨ菴難ｼ育ｬｬ4繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ�ｼ峨ｒ縺ｾ縺ｨ繧√※蜃ｺ縺吶�
 
 ### src.output.forecast_formatter
 

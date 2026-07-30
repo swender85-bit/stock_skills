@@ -382,6 +382,24 @@ def loss_harvest_value(unrealized_loss_jpy: Optional[float],
     years = int((cfg.get("capital_gains") or {}).get("loss_carryforward_years", 3))
     offset = min(abs(unrealized_loss_jpy), max(realized_gain_ytd_jpy or 0.0, 0.0))
 
+    # 相殺相手が無い/不明なら「0円の節税」を数字として出さない。
+    # 「約0円の税が消えます」は情報ゼロで、レポートを薄めるだけ。
+    if offset <= 0:
+        reason = ("当年の実現損益が不明です" if realized_gain_ytd_jpy is None
+                  else "当年の実現益がありません")
+        return {
+            "available": False,
+            "unrealized_loss_jpy": unrealized_loss_jpy,
+            "offsettable_jpy": 0.0,
+            "value_jpy": 0.0,
+            "carryforward_years": years,
+            "account": kind,
+            "message": (f"{reason}。今すぐ相殺できる利益が無いため即時の節税効果は"
+                        f"ありません（確定申告すれば損失は{years}年繰り越せます）。"),
+            "caveat": "税効果だけを理由に売るべきではありません。",
+            "recommendation": None,
+        }
+
     return {
         "available": True,
         "unrealized_loss_jpy": unrealized_loss_jpy,
@@ -443,6 +461,110 @@ def nisa_state(used_growth_jpy: float = 0.0, used_tsumitate_jpy: float = 0.0,
         "message": message,
         "disclaimer": "概算です。実際の使用額は証券会社の記録を確認してください。",
     }
+
+
+def nisa_used_from_holdings(holdings: list[dict], year: Optional[int] = None,
+                            cfg: Optional[dict] = None) -> dict:
+    """保有から NISA 枠の使用額を推定する。
+
+    ⚠️ **これは推定にすぎない。** 保有データに取得日が無いため「当年に使った枠」を
+    厳密には出せない。今ある NISA 保有の取得額を上限で切って返し、
+    `reliable=False` を必ず付ける。
+
+    ここを「確定値」として出すと、残枠を過大/過小に見せて枠の消滅を招く。
+    正確な使用額は証券会社の記録を見るしかない。
+    """
+    cfg = cfg or load_tax_config()
+    year = year or date.today().year
+    used: dict[str, float] = {"growth": 0.0, "tsumitate": 0.0}
+    has_dates = False
+
+    for h in holdings or []:
+        if not isinstance(h, dict):
+            continue
+        kind = account_kind(h.get("account"), cfg)
+        bucket = kind.get("nisa_bucket")
+        if not bucket or bucket not in used:
+            continue
+        shares = h.get("shares")
+        cost = h.get("cost_price")
+        divisor = float(h.get("unit_divisor") or 1.0) or 1.0
+        if not isinstance(shares, (int, float)) or not isinstance(cost, (int, float)):
+            continue
+        if h.get("purchase_date") or h.get("date"):
+            has_dates = True
+        used[bucket] += shares * cost / divisor
+
+    limits = (cfg.get("nisa") or {}).get("annual_limits") or {}
+    capped = {k: min(v, float(limits.get(k) or v)) for k, v in used.items()}
+
+    return {
+        "used": capped,
+        "raw": used,
+        "reliable": False,
+        "year": year,
+        "note": ("保有の取得額から推定した値です。取得日を持たないため"
+                 "『当年に使った枠』ではありません。"
+                 + ("" if has_dates else "正確な使用額は証券会社の記録で確認してください。")),
+    }
+
+
+def build_tax_state(
+    holdings: Optional[list[dict]] = None,
+    *,
+    year: Optional[int] = None,
+    realized_gain_ytd_jpy: Optional[float] = None,
+    loss_carryforward_jpy: Optional[float] = None,
+    cfg: Optional[dict] = None,
+) -> dict:
+    """当年の税務状態（実現損益・NISA残枠・繰越損失）を組み立てる。
+
+    実現損益は売買履歴から集計する。履歴が無い場合は **0 ではなく None** を返す。
+    0 にすると「利益が無い＝損益通算する相手がいない」と誤読されるため。
+    """
+    cfg = cfg or load_tax_config()
+    year = year or date.today().year
+    warnings = list(cfg.get("_warnings") or [])
+
+    if realized_gain_ytd_jpy is None:
+        realized_gain_ytd_jpy = _realized_gain_ytd(year)
+
+    nisa_used = nisa_used_from_holdings(holdings or [], year, cfg)
+    nisa = nisa_state(nisa_used["used"].get("growth", 0.0),
+                      nisa_used["used"].get("tsumitate", 0.0), cfg=cfg)
+    if not nisa_used["reliable"]:
+        warnings.append("NISA使用額は保有の取得額からの推定です。" + nisa_used["note"])
+
+    est_tax = None
+    if isinstance(realized_gain_ytd_jpy, (int, float)):
+        est_tax = capital_gains_tax(realized_gain_ytd_jpy, "特定", cfg)["tax"]
+
+    return {
+        "year": year,
+        "realized_gain_ytd_jpy": realized_gain_ytd_jpy,
+        "estimated_tax_jpy": est_tax,
+        "loss_carryforward_jpy": loss_carryforward_jpy,
+        "nisa": nisa,
+        "nisa_used_estimate": nisa_used,
+        "capital_gains_rate": (cfg.get("capital_gains") or {}).get("rate"),
+        "warnings": warnings,
+        "disclaimer": "概算です。税務助言ではありません。",
+    }
+
+
+def _realized_gain_ytd(year: int) -> Optional[float]:
+    """当年の実現損益。履歴が無ければ None（0 と区別する）。"""
+    try:
+        from src.core.portfolio.portfolio_io import get_performance_review
+
+        data = get_performance_review(year=year)
+    except Exception:
+        return None
+    stats = (data or {}).get("stats") or {}
+    if not stats.get("total"):
+        return None
+    total = stats.get("total_pnl")
+    return float(total) if isinstance(total, (int, float)) else None
 
 
 def nisa_suitability(expected_return_pct: Optional[float],

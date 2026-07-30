@@ -314,6 +314,12 @@ def _wait_option(target_jpy: float, cash_jpy: float, weekly_jpy: Optional[float]
     disclose = bool((cfg.get("privacy") or {}).get("disclose_absolute_amounts", True))
     in_horizon_jpy = (cash_jpy or 0) + (weekly_jpy or 0) * horizon
 
+    if weeks == 0:
+        # 手元の現金で足りている。「0週待つ」は選択肢ではない。
+        return {"kind": "wait", "viable": False, "rank": 99, "weeks": 0,
+                "label": "入金を待って取得する",
+                "detail": "手元の現金で足りるため、待つ必要はありません。"}
+
     # 「43週待て」は計画ではない。入金ペースに対して目標額が大きすぎる場合、
     # 待機を推奨1位に置くと、先延ばしを最善手として提示することになる。
     if weeks <= horizon:

@@ -132,8 +132,9 @@ def fetch(
             if circular:
                 detail["circular_reason"] = (
                     "この照合は、模型を生成した元CSVとの突合です。取り込み後に約定した"
-                    "売買は原理的に検出できません。実残高を確かめるには楽天証券から"
-                    "**新しいCSV**を保存してください（マイメニュー → 保有商品一覧）。"
+                    "売買は原理的に検出できません。独立した照合にするには、次に楽天証券から"
+                    "CSVを保存したとき、**取り込む前に** reconcile を実行してください"
+                    "（新しいCSV × 前回取り込み時点の模型 の突合になります）。"
                 )
             return make_snapshot(
                 _SOURCE, available=True, positions=positions, cash=cash,

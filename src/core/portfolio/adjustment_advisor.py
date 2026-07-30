@@ -58,6 +58,11 @@ class Action:
     rule_ids: list[str]
     screening_hint: str = ""
     screening_filter: dict = field(default_factory=dict)
+    #: 土曜設計書 提案3 — SELL / SWAP に必ず付ける税引後の見積もり。
+    #: 税引前で「売れ」と言うのは、20.315%のハンデを隠して提案すること。
+    tax_view: dict | None = None
+    #: 提案9 — 売却の代わりに入金で埋められるか。
+    funding_alternative: dict | None = None
 
 
 @dataclass
@@ -493,6 +498,112 @@ def merge_actions(actions: list[Action]) -> list[Action]:
 # Main entry point
 # ---------------------------------------------------------------------------
 
+#: 税引後の情報を必須で添えるアクション種別。
+_TAX_RELEVANT = (ActionType.SELL, ActionType.SWAP)
+
+
+def attach_tax_and_funding(actions: list[Action], positions: list[dict]) -> None:
+    """SELL / SWAP に税引後の手取り・損益分岐・入金代替案を付ける (提案3 / 提案9)。
+
+    税引前で「売れ」と言うのは、含み益に対する 20.315% のハンデを
+    隠したまま提案することであり、乗り換え提案を構造的に過剰にする。
+
+    計算できない場合も `tax_view["available"]=False` を必ず立てる。
+    **黙って税引前のまま提案しない。**
+    """
+    by_symbol = {str(p.get("symbol", "")).upper(): p for p in positions or []}
+
+    for a in actions:
+        if a.type not in _TAX_RELEVANT:
+            continue
+        pos = by_symbol.get(str(a.target).upper())
+        a.tax_view = _tax_view_for(pos, a.target)
+        a.funding_alternative = _funding_alternative_for(pos, a.tax_view)
+
+
+def _tax_view_for(pos: dict | None, target: str) -> dict:
+    if not pos:
+        return {"available": False,
+                "note": f"{target} の保有情報が見つからず税引後の手取りを計算できません。"}
+
+    shares = pos.get("shares")
+    price = pos.get("current_price")
+    cost = pos.get("cost_price")
+    if not all(isinstance(x, (int, float)) for x in (shares, price, cost)):
+        return {"available": False,
+                "note": "数量・価格・取得単価が揃わず税引後の手取りを計算できません。"}
+
+    currency = str(pos.get("market_currency") or "JPY").upper()
+    fx = pos.get("fx_rate")
+    if not isinstance(fx, (int, float)):
+        # 円建て評価額から為替レートを逆算できるならそれを使う。
+        ev, ev_jpy = pos.get("evaluation"), pos.get("evaluation_jpy")
+        fx = (ev_jpy / ev) if (isinstance(ev, (int, float)) and ev
+                               and isinstance(ev_jpy, (int, float))) else 1.0
+
+    try:
+        from src.core.portfolio.tax import switching_hurdle
+
+        h = switching_hurdle(shares, price, cost, pos.get("account"),
+                             fx_rate=fx, currency=currency)
+    except Exception as e:
+        return {"available": False, "note": f"税計算に失敗: {type(e).__name__}"}
+
+    if not h.get("available"):
+        return {"available": False, "note": h.get("reason") or "計算不能"}
+
+    return {
+        "available": True,
+        "gross_jpy": h.get("gross_jpy"),
+        "net_jpy": h.get("net_jpy"),
+        "tax_jpy": h.get("tax_jpy"),
+        "friction_jpy": h.get("friction_jpy"),
+        "switching_hurdle_pct": h.get("hurdle_pct"),
+        "account": (h.get("account") or {}).get("label"),
+        "note": h.get("message"),
+        "disclaimer": h.get("disclaimer"),
+    }
+
+
+def _funding_alternative_for(pos: dict | None, tax_view: dict) -> dict | None:
+    """売却で作ろうとしている資金を、入金で埋められるかを併記する (提案9)。
+
+    設計書 受け入れ基準2: 売却を伴う全提案に、入金代替案が併記される。
+    """
+    if not tax_view.get("available"):
+        return None
+    target_jpy = tax_view.get("gross_jpy")
+    if not isinstance(target_jpy, (int, float)) or target_jpy <= 0:
+        return None
+    try:
+        from src.core.portfolio.runway import (
+            load_cashflow_config,
+            weeks_until,
+            weekly_investable,
+        )
+
+        cfg = load_cashflow_config()
+        est = weekly_investable(None, cfg)
+        weeks = weeks_until(target_jpy, est.get("weekly_jpy"), 0.0)
+    except Exception:
+        return None
+
+    if weeks is None:
+        return {"available": False,
+                "note": ("入金で代替できるかを試算できません"
+                         "（config/cashflow.yaml に月額を書いてください）。")}
+    horizon = 12
+    return {
+        "available": True,
+        "weeks": weeks,
+        "realistic": weeks <= horizon,
+        "note": (f"同額を入金で用意するには約{weeks}週。"
+                 + ("売らずに待つ選択肢があります。"
+                    if weeks <= horizon else
+                    "入金だけでは現実的な期間で届きません（規模を落とす案も検討）。")),
+    }
+
+
 def generate_adjustment_plan(
     health_result: dict,
     regime: MarketRegime,
@@ -557,7 +668,10 @@ def generate_adjustment_plan(
         a.target,
     ))
 
-    # 6. Summary
+    # 6. 土曜設計書 提案3/9: 売却系アクションに税引後の見積もりと入金代替案を添える。
+    attach_tax_and_funding(merged, positions)
+
+    # 7. Summary
     counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
     for a in merged:
         counts[a.urgency.value] += 1

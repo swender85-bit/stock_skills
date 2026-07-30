@@ -273,17 +273,46 @@ def format_what_if(result: dict) -> str:
     if removals:
         lines.append("### 売却銘柄")
         lines.append("")
-        lines.append("| 銘柄 | 株数 | 売却代金（試算） |")
-        lines.append("|:-----|-----:|----------------:|")
+        # 土曜設計書 提案3: 税引前だけを出すと乗り換えが構造的に過剰になる。
+        lines.append("| 銘柄 | 株数 | 売却代金（税引前） | 手取り（税引後） | 税・手数料・為替 | 損益分岐 |")
+        lines.append("|:-----|-----:|----------------:|---------------:|---------------:|--------:|")
         for rem in removals:
             symbol = rem.get("symbol", "-")
             shares = rem.get("shares", 0)
             rem_proceeds = rem.get("proceeds_jpy", 0.0)
+            if rem.get("tax_available"):
+                net = _fmt_jpy(rem.get("net_proceeds_jpy") or 0.0)
+                fric = _fmt_jpy(rem.get("friction_jpy") or 0.0)
+                hurdle = rem.get("switching_hurdle_pct")
+                hurdle_s = f"+{hurdle:.1f}%" if isinstance(hurdle, (int, float)) else "—"
+            else:
+                net = fric = hurdle_s = "算出不可"
             lines.append(
-                f"| {symbol} | {shares:,} | {_fmt_jpy(rem_proceeds)} |"
+                f"| {symbol} | {shares:,} | {_fmt_jpy(rem_proceeds)} "
+                f"| {net} | {fric} | {hurdle_s} |"
             )
         lines.append("")
-        lines.append(f"売却代金合計: {_fmt_jpy(proceeds or 0.0)}")
+        lines.append(f"売却代金合計（税引前）: {_fmt_jpy(proceeds or 0.0)}")
+
+        net_after_tax = result.get("net_proceeds_after_tax_jpy")
+        if net_after_tax is not None:
+            lines.append(f"**手取り合計（税引後）: {_fmt_jpy(net_after_tax)}**")
+        friction = result.get("tax_friction_jpy")
+        blended = result.get("switching_hurdle_pct")
+        if friction:
+            lines.append(f"税・手数料・為替で消える額: {_fmt_jpy(friction)}")
+        if isinstance(blended, (int, float)):
+            lines.append(
+                f"**乗り換え損益分岐: 乗り換え先は現保有を +{blended:.1f}% "
+                "上回って初めて損益分岐します。**")
+        missing = [r.get("symbol") for r in removals if not r.get("tax_available")]
+        if missing:
+            lines.append(
+                f"⚠️ {', '.join(str(m) for m in missing)} は税引後の手取りを"
+                "算出できませんでした（税引前の数字を手取りとして扱わないでください）。")
+        if result.get("tax_note"):
+            lines.append("")
+            lines.append(f"ℹ️ {result['tax_note']}")
         lines.append("")
 
     # --- Proposed stocks ---
@@ -318,10 +347,20 @@ def format_what_if(result: dict) -> str:
         lines.append("|:-----|-----:|")
         if proposed:
             lines.append(f"| 購入必要資金 | {_fmt_jpy(required_cash)} |")
-        lines.append(f"| 売却代金（試算） | {_fmt_jpy(proceeds or 0.0)} |")
+        lines.append(f"| 売却代金（税引前） | {_fmt_jpy(proceeds or 0.0)} |")
+        net_after_tax = result.get("net_proceeds_after_tax_jpy")
+        if net_after_tax is not None:
+            lines.append(f"| 売却手取り（税引後） | {_fmt_jpy(net_after_tax)} |")
         if net_cash is not None and proposed:
             suffix = "（余剰資金）" if net_cash >= 0 else "（追加資金が必要）"
-            lines.append(f"| 差額 | {_fmt_jpy(net_cash)}{suffix} |")
+            lines.append(f"| 差額（税引前） | {_fmt_jpy(net_cash)}{suffix} |")
+        # 判断に使うのは税引後の差額。税引前で「買える」と読むと実際には足りない。
+        net_cash_after_tax = result.get("net_cash_after_tax_jpy")
+        if net_cash_after_tax is not None and proposed:
+            suffix = "（余剰資金）" if net_cash_after_tax >= 0 else "（追加資金が必要）"
+            lines.append(
+                f"| **差額（税引後・判断に使う）** | "
+                f"**{_fmt_jpy(net_cash_after_tax)}{suffix}** |")
         lines.append("")
 
     # --- Portfolio change comparison ---

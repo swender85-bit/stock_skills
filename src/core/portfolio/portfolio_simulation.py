@@ -504,6 +504,9 @@ def run_what_if_simulation(
                     rem_copy["proceeds_jpy"] = ratio * pos.get("evaluation_jpy", 0.0)
                 else:
                     rem_copy["proceeds_jpy"] = 0.0
+                # 土曜設計書 提案3: 売却には必ず税引後の手取りと損益分岐を添える。
+                # これが無い乗り換え提案は構造的に過剰になる。
+                _attach_tax_view(rem_copy, pos, fx_rates)
                 enriched_removals.append(rem_copy)
 
             # Health check for removed stocks via temporary CSV
@@ -560,4 +563,78 @@ def run_what_if_simulation(
         result["proceeds_jpy"] = proceeds
         result["net_cash_jpy"] = proceeds - required_cash
 
+        # 土曜設計書 提案3: 資金収支は**税引後**で見なければ意味がない。
+        # 税引前の proceeds で「買える」と判断すると、実際には足りない。
+        net_after_tax = _sum_key(enriched_removals, "net_proceeds_jpy")
+        friction = _sum_key(enriched_removals, "friction_jpy")
+        result["net_proceeds_after_tax_jpy"] = net_after_tax
+        result["tax_friction_jpy"] = friction
+        result["net_cash_after_tax_jpy"] = (
+            None if net_after_tax is None else net_after_tax - required_cash)
+        result["switching_hurdle_pct"] = _blended_hurdle(enriched_removals)
+        result["tax_note"] = (
+            "売却代金は税・手数料・為替スプレッド控除後（手取り）で表示しています。"
+            "乗り換え先はこの摩擦分を取り返して初めて損益分岐します。概算であり税務助言ではありません。"
+        )
+
     return result
+
+
+def _sum_key(rows: list[dict] | None, key: str) -> float | None:
+    vals = [r.get(key) for r in rows or []
+            if isinstance(r.get(key), (int, float))]
+    return sum(vals) if vals else None
+
+
+def _blended_hurdle(rows: list[dict] | None) -> float | None:
+    """売却全体の損益分岐率。手取り合計に対する総額の目減り分。"""
+    gross = _sum_key(rows, "proceeds_jpy")
+    net = _sum_key(rows, "net_proceeds_jpy")
+    if not gross or not net or net <= 0:
+        return None
+    return round((gross / net - 1.0) * 100.0, 2)
+
+
+def _attach_tax_view(rem: dict, pos: dict, fx_rates: dict) -> None:
+    """売却1件に税引後の手取りと乗り換え損益分岐を付ける。
+
+    計算できない場合も `tax_available=False` を必ず立てる。
+    **黙って税引前の数字を手取りとして扱わない。**
+    """
+    shares = rem.get("shares")
+    price = pos.get("current_price")
+    cost = pos.get("cost_price")
+    currency = (pos.get("market_currency") or "JPY").upper()
+    fx = fx_rates.get(currency, 1.0) if isinstance(fx_rates, dict) else 1.0
+    # portfolio.csv は口座区分を持たない。未知＝課税口座として保守的に扱う。
+    account = pos.get("account") or rem.get("account")
+
+    if not all(isinstance(x, (int, float)) for x in (shares, price, cost)):
+        rem["tax_available"] = False
+        rem["tax_note"] = "数量・価格・取得単価が揃わず税引後の手取りを計算できません。"
+        return
+
+    try:
+        from src.core.portfolio.tax import switching_hurdle
+
+        h = switching_hurdle(shares, price, cost, account,
+                             fx_rate=fx, currency=currency)
+    except Exception as e:
+        rem["tax_available"] = False
+        rem["tax_note"] = f"税計算に失敗しました: {type(e).__name__}"
+        return
+
+    if not h.get("available"):
+        rem["tax_available"] = False
+        rem["tax_note"] = h.get("reason") or "税引後の手取りを計算できません。"
+        return
+
+    rem["tax_available"] = True
+    rem["account_kind"] = (h.get("account") or {}).get("label")
+    rem["net_proceeds_jpy"] = h.get("net_jpy")
+    rem["tax_jpy"] = h.get("tax_jpy")
+    rem["fee_jpy"] = h.get("fee_jpy")
+    rem["fx_cost_jpy"] = h.get("fx_cost_jpy")
+    rem["friction_jpy"] = h.get("friction_jpy")
+    rem["switching_hurdle_pct"] = h.get("hurdle_pct")
+    rem["tax_note"] = h.get("message")

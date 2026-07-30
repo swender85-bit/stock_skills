@@ -86,8 +86,62 @@ def format_adjustment_plan(plan: AdjustmentPlan) -> str:
 
         lines.append("")
 
+    # 土曜設計書 提案3/9: 売却系の提案は税引後で見なければ判断できない。
+    lines.extend(_format_tax_section(plan.actions))
+
     # Summary
     lines.append("---")
     lines.append(f"**Summary:** {plan.summary}")
 
     return "\n".join(lines)
+
+
+def _yen(v) -> str:
+    return f"¥{v:,.0f}" if isinstance(v, (int, float)) else "—"
+
+
+def _format_tax_section(actions: list[Action]) -> list[str]:
+    """SELL / SWAP の税引後の手取り・損益分岐・入金代替案。
+
+    ここを出さないと、含み益に対する 20.315% のハンデを隠したまま
+    売却を提案することになる（乗り換え提案の構造的な過剰）。
+    """
+    relevant = [a for a in actions if getattr(a, "tax_view", None) is not None]
+    if not relevant:
+        return []
+
+    lines = ["### 税引後の再評価（売却系の提案）", ""]
+    lines.append("| Target | 売却額(税引前) | 手取り(税引後) | 摩擦 | 損益分岐 | 口座 |")
+    lines.append("|:-------|-------------:|-------------:|-----:|--------:|:-----|")
+
+    unavailable: list[str] = []
+    for a in relevant:
+        t = a.tax_view or {}
+        if not t.get("available"):
+            unavailable.append(a.target)
+            continue
+        h = t.get("switching_hurdle_pct")
+        lines.append(
+            f"| {a.target} | {_yen(t.get('gross_jpy'))} | {_yen(t.get('net_jpy'))} "
+            f"| {_yen(t.get('friction_jpy'))} "
+            f"| {f'+{h:.1f}%' if isinstance(h, (int, float)) else '—'} "
+            f"| {t.get('account') or '—'} |")
+    lines.append("")
+
+    for a in relevant:
+        f = getattr(a, "funding_alternative", None) or {}
+        if f.get("note"):
+            mark = "★" if f.get("realistic") else "ℹ️"
+            lines.append(f"- {mark} **{a.target}** 入金代替: {f['note']}")
+    if any(getattr(a, "funding_alternative", None) for a in relevant):
+        lines.append("")
+
+    if unavailable:
+        lines.append(f"⚠️ {', '.join(unavailable)} は税引後の手取りを算出できませんでした。"
+                     "税引前の金額を手取りとして扱わないでください。")
+        lines.append("")
+
+    lines.append("ℹ️ 乗り換え先は上記の損益分岐を上回って初めて意味があります。"
+                 "概算であり税務助言ではありません。")
+    lines.append("")
+    return lines
