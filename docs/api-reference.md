@@ -568,7 +568,7 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `capture(symbol: Optional[str], name: Optional[str]=None, *, occasion: str='weekly', store: bool=True, base_dir: str=DEFAULT_STORE_DIR) -> dict` — 1驫俶氛縺ｮ迚ｩ隱樣㍼繧ｹ繝翫ャ繝励す繝ｧ繝�繝医ｒ蜿悶ｊ縲∬ｿｽ險倅ｿ晏ｭ倥☆繧九�
 - `append_snapshot(snap: dict, base_dir: str=DEFAULT_STORE_DIR) -> Optional[Path]` — 霑ｽ險伜ｰら畑縲る℃蜴ｻ縺ｮ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医�ｯ邨ｶ蟇ｾ縺ｫ譖ｸ縺肴鋤縺医↑縺�縲�
 - `load_snapshots(symbol: Optional[str], name: Optional[str]=None, base_dir: str=DEFAULT_STORE_DIR) -> list[dict]`
-- `capture_many(holdings: list[dict], occasion: str='weekly', base_dir: str=DEFAULT_STORE_DIR) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医ｒ蜿悶ｋ�ｼ磯ｱ谺｡縺ｮ蜈･蜿｣�ｼ峨�
+- `capture_many(holdings: list[dict], occasion: str='weekly', base_dir: str=DEFAULT_STORE_DIR, time_budget: Optional[float]=None) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ繧ｹ繝翫ャ繝励す繝ｧ繝�繝医ｒ蜿悶ｋ�ｼ磯ｱ谺｡縺ｮ蜈･蜿｣�ｼ峨�
 - `crowding(symbol: Optional[str], name: Optional[str]=None, base_dir: str=DEFAULT_STORE_DIR) -> dict` — 繝�繝ｼ繧ｼ險倬鹸譎らせ縺ｫ蟇ｾ縺吶ｋ迴ｾ蝨ｨ縺ｮ迚ｩ隱樣㍼縺ｮ蛟咲紫縲�
 
 ### src.core.research.outcome_tracker

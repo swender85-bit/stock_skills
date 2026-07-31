@@ -416,13 +416,30 @@ def load_snapshots(symbol: Optional[str], name: Optional[str] = None,
     return out
 
 
+#: 保有全体の記録に使ってよい秒数。無人週次でここが伸びると全体が遅れる。
+#: GDELT が 429 を返し続けると、バックオフで1銘柄あたり1分超かかる実測がある。
+DEFAULT_TIME_BUDGET = float(os.environ.get("NARRATIVE_TIME_BUDGET", "180"))
+
+
 def capture_many(holdings: list[dict], occasion: str = "weekly",
-                 base_dir: str = DEFAULT_STORE_DIR) -> dict:
+                 base_dir: str = DEFAULT_STORE_DIR,
+                 time_budget: Optional[float] = None) -> dict:
     """保有全体のスナップショットを取る（週次の入口）。
 
     1銘柄でも落ちたら他も止まる、という作りにはしない。
+
+    **時間予算を超えたら残りをスキップする。** 記録は重要だが、
+    週次レポート全体を止めてまで取るものではない。スキップした銘柄は
+    「取得できなかった」として明示する（黙って落とさない）。
     """
+    import time
+
+    budget = DEFAULT_TIME_BUDGET if time_budget is None else time_budget
+    deadline = time.monotonic() + budget if budget > 0 else None
+
     results: list[dict] = []
+    skipped: list[str] = []
+
     for h in holdings or []:
         if not isinstance(h, dict):
             continue
@@ -430,19 +447,30 @@ def capture_many(holdings: list[dict], occasion: str = "weekly",
         nm = h.get("name")
         if not sym and not nm:
             continue
+        if deadline is not None and time.monotonic() > deadline:
+            skipped.append(str(sym or nm))
+            continue
         try:
             results.append(capture(sym, nm, occasion=occasion, base_dir=base_dir))
         except Exception as e:
             results.append({"symbol": sym, "name": nm, "available": False,
                             "errors": [f"{type(e).__name__}"]})
+
     ok = [r for r in results if r.get("available")]
+    note = ("記事量は記録開始以降しか比較できません。"
+            "混雑度の分析は基準点が溜まってから有効になります。")
+    if skipped:
+        note += (f" 時間予算({budget:.0f}秒)を超えたため {len(skipped)}銘柄を"
+                 "スキップしました（材料なしではなく未取得）。")
+
     return {
         "captured": len(ok),
         "attempted": len(results),
+        "skipped": skipped,
+        "time_budget_sec": budget,
         "occasion": occasion,
         "results": results,
-        "note": ("記事量は記録開始以降しか比較できません。"
-                 "混雑度の分析は基準点が溜まってから有効になります。"),
+        "note": note,
     }
 
 

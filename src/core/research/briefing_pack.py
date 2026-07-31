@@ -23,6 +23,8 @@ Neo4j/moomoo/Finnhub/ネットワークがどれか落ちてもパックは必�
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from typing import Any, Optional
 
@@ -33,6 +35,24 @@ from src.core.portfolio.weekly import (
 
 # パックのスキーマ版。executor 側の互換チェック用。
 PACK_VERSION = 1
+
+
+#: 各工程の所要秒数。無人実行でどこが遅いかを後から追えるようにする。
+#: 土曜7:12の無人実行がタイムアウトしたとき、原因を推測しないで済む。
+_TIMINGS: dict[str, float] = {}
+
+
+@contextmanager
+def _timed(label: str):
+    start = time.monotonic()
+    try:
+        yield
+    finally:
+        _TIMINGS[label] = round(time.monotonic() - start, 1)
+
+
+def _reset_timings() -> None:
+    _TIMINGS.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -570,19 +590,28 @@ def build_portfolio_briefing(
     if config is None:
         config = load_holdings_config()
 
-    base = build_report_data(
-        config, rss_snapshot=rss_snapshot, monthly_contribution=monthly_contribution
-    )
+    _reset_timings()
+    with _timed("prices_and_holdings"):
+        base = build_report_data(
+            config, rss_snapshot=rss_snapshot,
+            monthly_contribution=monthly_contribution
+        )
     analyses = base.get("analyses") or []
     symbols = [a.get("symbol") for a in analyses if a.get("symbol")]
     total_jpy = base.get("total_jpy") or 0.0
     today = date.today().isoformat()
 
-    prior_index = _prior_report_index()
-    competitors = _safe_competitors(symbols)
-    news = _safe_news_watch(symbols)
-    moomoo = _safe_moomoo(symbols) if include_moomoo else {}
-    prior_context = _safe_context("週次ポートフォリオ分析 PF全体の状況") if include_context else ""
+    with _timed("prior_reports"):
+        prior_index = _prior_report_index()
+    with _timed("competitors"):
+        competitors = _safe_competitors(symbols)
+    with _timed("news"):
+        news = _safe_news_watch(symbols)
+    with _timed("moomoo"):
+        moomoo = _safe_moomoo(symbols) if include_moomoo else {}
+    with _timed("graph_context"):
+        prior_context = (_safe_context("週次ポートフォリオ分析 PF全体の状況")
+                         if include_context else "")
 
     holdings = [
         _holding_view(a, prior_index, competitors, total_jpy, today)
@@ -590,9 +619,11 @@ def build_portfolio_briefing(
     ]
 
     # 照合は分析より先。ここが通らないと下流の数値は全部条件付きになる。
-    reconciliation = (_safe_reconciliation(config, base, include_moomoo)
-                      if include_reconciliation else None)
-    narrative = _safe_narrative(holdings, capture_narrative)
+    with _timed("reconciliation"):
+        reconciliation = (_safe_reconciliation(config, base, include_moomoo)
+                          if include_reconciliation else None)
+    with _timed("narrative"):
+        narrative = _safe_narrative(holdings, capture_narrative)
 
     warnings: list[str] = []
     if not news.get("available"):
@@ -607,13 +638,16 @@ def build_portfolio_briefing(
         warnings.append(
             "残高の独立検証ができていません（模型の生成元と同じデータを見ています）。")
 
-    forward = _safe_forward(holdings, moomoo, news.get("index_watch") or [],
-                            _prior_calendar())
-    constraints = _safe_constraints(config, base, holdings, reconciliation)
+    with _timed("forward_events"):
+        forward = _safe_forward(holdings, moomoo, news.get("index_watch") or [],
+                                _prior_calendar())
+    with _timed("constraints"):
+        constraints = _safe_constraints(config, base, holdings, reconciliation)
 
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
-    falsification = _safe_falsification(holdings)
+    with _timed("falsification"):
+        falsification = _safe_falsification(holdings)
     pack_like = {
         "meta": {"as_of": today},
         "portfolio": _portfolio_summary(base),
@@ -622,7 +656,14 @@ def build_portfolio_briefing(
         # 来週の日程変更検出に使うので、カレンダーもスナップショットに残す
         "forward_calendar": forward.get("calendar"),
     }
-    diff_bundle = _safe_diff(pack_like, store_snapshot)
+    with _timed("week_diff"):
+        diff_bundle = _safe_diff(pack_like, store_snapshot)
+    with _timed("execution_audit"):
+        execution_audit = _safe_execution_audit()
+    with _timed("model_audit"):
+        model_audit = _safe_model_audit(
+            holdings, _portfolio_summary(base), news.get("index_watch") or [],
+            store_snapshot)
 
     assessment = None
     try:
@@ -653,15 +694,16 @@ def build_portfolio_briefing(
             "holdings_import": base.get("holdings_import"),
             "fx_rate": base.get("fx_rate"),
             "warnings": warnings,
+            # 無人実行がタイムアウトしたとき、どこが遅かったかを後から追える
+            "timings_sec": dict(_TIMINGS),
+            "total_sec": round(sum(_TIMINGS.values()), 1),
         },
         "reconciliation": reconciliation,
         "falsification": falsification,
         "forward": forward,
         "constraints": constraints,
-        "execution_audit": _safe_execution_audit(),
-        "model_audit": _safe_model_audit(
-            holdings, _portfolio_summary(base), news.get("index_watch") or [],
-            store_snapshot),
+        "execution_audit": execution_audit,
+        "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),
         "cumulative_diff": diff_bundle.get("cumulative"),
         "information": assessment,
