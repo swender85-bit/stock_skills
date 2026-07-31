@@ -123,6 +123,32 @@ def fetch_returns(symbol: str, period: str = "2y") -> dict[str, float]:
         return {}
 
 
+def weekly_factor_moves(days: int = 5,
+                        tickers: Optional[dict] = None) -> dict[str, float]:
+    """直近N営業日の因子の累積変化率（%）。
+
+    模型監査（提案10）の予測に使う。実現リターンが**週次**なので、
+    因子も週次で揃えないと予測と実現が別の単位になる。
+    指数ウォッチの `percent_change` は**日次**なので流用してはいけない。
+
+    取れなかった因子は含めない（0%として扱うと「動かなかった」と誤読される）。
+    """
+    tickers = tickers or FACTOR_TICKERS
+    out: dict[str, float] = {}
+    for name, ticker in tickers.items():
+        series = fetch_returns(ticker, period="3mo")
+        if not series:
+            continue
+        recent = [series[d] for d in sorted(series)[-days:]]
+        if not recent:
+            continue
+        cumulative = 1.0
+        for r in recent:
+            cumulative *= (1.0 + r)
+        out[name] = round((cumulative - 1.0) * 100.0, 4)
+    return out
+
+
 def build_factor_returns(period: str = "2y",
                          tickers: Optional[dict] = None) -> dict[str, dict]:
     """因子系列の日次リターン。取れなかった因子は**含めない**。

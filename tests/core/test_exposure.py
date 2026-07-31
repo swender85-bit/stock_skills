@@ -285,3 +285,22 @@ def test_worst_days_picks_the_bottom_tail():
 def test_stress_correlation_requires_days():
     s = _linear_factor(100)
     assert ex.stress_correlation(s, s, None) is None
+
+
+# ---------------------------------------------------------------------------
+# 週次の因子変化（模型監査の入力）
+# ---------------------------------------------------------------------------
+
+
+def test_weekly_factor_moves_compounds_daily_returns(monkeypatch):
+    """指数ウォッチの percent_change は日次。週次予測に流用してはいけない。"""
+    monkeypatch.setattr(ex, "fetch_returns",
+                        lambda t, period="2y": {f"d{i}": 0.01 for i in range(10)})
+    moves = ex.weekly_factor_moves(days=5, tickers={"market": "^GSPC"})
+    assert moves["market"] == pytest.approx((1.01 ** 5 - 1) * 100, abs=1e-3)
+
+
+def test_weekly_factor_moves_omits_unavailable_factors(monkeypatch):
+    """取れない因子を 0% にすると『動かなかった』と誤読される。"""
+    monkeypatch.setattr(ex, "fetch_returns", lambda t, period="2y": {})
+    assert ex.weekly_factor_moves(tickers={"market": "^GSPC"}) == {}

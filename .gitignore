@@ -19,3 +19,4 @@ config/user_profile.yaml
 data/narrative/
 data/reconciliation/
 data/weekly_snapshots/
+data/model_scorecard/

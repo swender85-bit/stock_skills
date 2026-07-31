@@ -346,6 +346,74 @@ def _safe_execution_audit(days: int = 90) -> dict:
                 "errors": [f"執行監査を実行できません: {type(e).__name__}"]}
 
 
+def _safe_model_audit(holdings: list[dict], pf_summary: dict,
+                      indices: list[dict], store: bool) -> dict:
+    """模型監査（提案10）。**記録は今週から始める。**
+
+    26週の蓄積が前提だが、記録を始めなければ26週後も測れない。
+    分析は「データ蓄積中」でよいので、(予測, 実現) のペアだけは毎週積む。
+    """
+    try:
+        from src.core.risk.model_audit import build_model_audit
+    except Exception as e:
+        return {"score": {"available": False, "reason": f"{type(e).__name__}"},
+                "errors": [f"模型監査を読み込めません: {type(e).__name__}"]}
+
+    pf_betas = _safe_pf_betas(holdings)
+    factor_moves = _factor_moves(indices)
+    realized = _realized_week_pct(holdings)
+
+    try:
+        return build_model_audit(
+            pf_betas, factor_moves, realized,
+            context={"has_leverage": any(h.get("leverage") for h in holdings or [])},
+            store=store)
+    except Exception as e:
+        return {"score": {"available": False, "reason": f"{type(e).__name__}"},
+                "errors": [f"模型監査に失敗: {type(e).__name__}: {e}"]}
+
+
+def _safe_pf_betas(holdings: list[dict]) -> dict:
+    """PF の因子エクスポージャー。取れなければ空（予測を作らない）。"""
+    try:
+        from src.core.exposure import estimate_many, portfolio_exposure
+
+        symbols = sorted({h.get("symbol") for h in holdings or [] if h.get("symbol")})
+        if not symbols:
+            return {}
+        pf = portfolio_exposure(holdings, estimate_many(symbols))
+        return pf.get("betas") or {} if pf.get("available") else {}
+    except Exception:
+        return {}
+
+
+def _factor_moves(indices: list[dict]) -> dict:
+    """因子の**週次**変化率。
+
+    指数ウォッチの `percent_change` は日次なので流用してはいけない。
+    実現リターンが週次である以上、因子も週次で揃えないと単位が食い違う。
+    """
+    try:
+        from src.core.exposure import weekly_factor_moves
+
+        return weekly_factor_moves()
+    except Exception:
+        return {}
+
+
+def _realized_week_pct(holdings: list[dict]) -> Optional[float]:
+    """今週のPF実現リターン（評価額加重）。取れなければ None。"""
+    total_weight = 0.0
+    weighted = 0.0
+    for h in holdings or []:
+        w = h.get("weight_pct")
+        chg = h.get("week_change_pct")
+        if isinstance(w, (int, float)) and isinstance(chg, (int, float)):
+            total_weight += float(w)
+            weighted += float(w) * float(chg)
+    return round(weighted / total_weight, 3) if total_weight else None
+
+
 def _prior_calendar() -> Optional[dict]:
     """前週スナップショットに保存された翌週カレンダー。
 
@@ -591,6 +659,9 @@ def build_portfolio_briefing(
         "forward": forward,
         "constraints": constraints,
         "execution_audit": _safe_execution_audit(),
+        "model_audit": _safe_model_audit(
+            holdings, _portfolio_summary(base), news.get("index_watch") or [],
+            store_snapshot),
         "week_diff": diff_bundle.get("diff"),
         "cumulative_diff": diff_bundle.get("cumulative"),
         "information": assessment,
