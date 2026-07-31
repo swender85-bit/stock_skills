@@ -372,7 +372,7 @@ def _safe_constraints(config: dict, base: dict, holdings: list[dict],
     設計書 第3章の順序: 制約 → 機会。逆にすると実行できない推奨を先に読ませる。
     """
     out: dict = {"tax_state": None, "runway_bundle": None, "attention": None,
-                 "loss_harvest": [], "errors": []}
+                 "loss_harvest": [], "liquidity": None, "errors": []}
 
     total_jpy = base.get("total_jpy")
     cash_jpy = base.get("cash_jpy")
@@ -393,6 +393,16 @@ def _safe_constraints(config: dict, base: dict, holdings: list[dict],
                 out["loss_harvest"].append(lh)
     except Exception as e:
         out["errors"].append(f"税務状態: {type(e).__name__}: {e}")
+
+    # 流動性は「行動可能な空間」の一部（設計書 第3章の第4セクション）。
+    # 売れない銘柄の売却を計画に入れないため、制約側に置く。
+    try:
+        from src.core.risk.liquidity import build_liquidity_section
+
+        out["liquidity"] = build_liquidity_section(
+            holdings, cash_jpy=cash_jpy, total_jpy=total_jpy)
+    except Exception as e:
+        out["errors"].append(f"流動性: {type(e).__name__}: {e}")
 
     try:
         from src.core.portfolio.runway import (

@@ -71,6 +71,73 @@ if HAS_HISTORY:
 # Portfolio data loading
 # ---------------------------------------------------------------------------
 
+def _print_liquidity(portfolio: list[dict], recommendations) -> None:
+    """流動性制約を出力する (土曜設計書 提案6)。
+
+    ストレステストは銘柄と比率しか受け取らないので、**実際の株数**は
+    保有定義から引く。株数が分からない銘柄は「判定不能」にする。
+    **判定不能を「流動的」と扱わない。**
+    """
+    try:
+        from src.core.risk.liquidity import build_liquidity_section
+        from src.output.liquidity_formatter import format_liquidity_section
+    except Exception:
+        return
+
+    try:
+        shares_by_symbol, accounts, cash_jpy, total_jpy = _holdings_lookup()
+        holdings = []
+        for p in portfolio or []:
+            sym = p.get("symbol")
+            if not sym:
+                continue
+            holdings.append({
+                "symbol": sym,
+                "name": p.get("name") or sym,
+                "shares": shares_by_symbol.get(sym),
+                "account": accounts.get(sym),
+                "weight_pct": (p.get("weight") or 0.0) * 100.0,
+            })
+
+        buy_candidates = [r for r in (recommendations or [])
+                          if "BUY" in str(r.get("action") or "").upper()
+                          or "買" in str(r.get("action") or "")]
+
+        bundle = build_liquidity_section(
+            holdings, cash_jpy=cash_jpy, total_jpy=total_jpy,
+            recommendations=recommendations or [],
+            buy_candidates=buy_candidates)
+        text = format_liquidity_section(bundle)
+        if text:
+            print("\n---\n")
+            print(text)
+    except Exception as e:
+        print(f"\n※ 流動性制約の評価に失敗しました: {type(e).__name__}: {e}\n")
+
+
+def _holdings_lookup():
+    """保有定義から 株数 / 口座区分 / 現金 / 総額 を引く。失敗しても壊れない。"""
+    try:
+        from src.core.portfolio.weekly import build_report_data, load_holdings_config
+
+        base = build_report_data(load_holdings_config())
+    except Exception:
+        return {}, {}, None, None
+
+    shares: dict[str, float] = {}
+    accounts: dict[str, str] = {}
+    for a in base.get("analyses") or []:
+        sym = a.get("symbol")
+        if not sym:
+            continue
+        qty = a.get("shares")
+        if isinstance(qty, (int, float)):
+            shares[sym] = shares.get(sym, 0.0) + float(qty)
+        if a.get("account") and sym not in accounts:
+            accounts[sym] = a["account"]
+    return shares, accounts, base.get("cash_jpy"), base.get("total_jpy")
+
+
 def load_portfolio(
     symbols: list[str],
     weights: list[float],
@@ -633,6 +700,14 @@ def main():
             "(stress_formatter モジュールが未実装のため、"
             "上記の分析結果を元にClaudeが推奨アクションを生成してください)\n"
         )
+
+    # ------------------------------------------------------------------
+    # 流動性制約 (土曜設計書 提案6)
+    #
+    # ストレステストは「ストレス時に自由に売買できる」と暗黙に仮定している。
+    # 売れない銘柄の売却推奨は、推奨ではなく雑音である。
+    # ------------------------------------------------------------------
+    _print_liquidity(portfolio, recommendations)
 
     # ------------------------------------------------------------------
     # Raw data dump for Claude's analysis

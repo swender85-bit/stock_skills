@@ -213,6 +213,19 @@ def format_constraints(bundle: dict) -> str:
         format_tax_state(bundle.get("tax_state") or {}),
         format_runway(bundle.get("runway_bundle") or {}),
         format_loss_harvest(bundle.get("loss_harvest") or []),
+        _format_liquidity(bundle.get("liquidity")),
         format_attention(bundle.get("attention") or {}),
     ]
     return "\n".join(p for p in parts if p)
+
+
+def _format_liquidity(liquidity: Optional[dict]) -> str:
+    """流動性（提案6）。行動可能な空間の一部なので制約側に置く。"""
+    if not liquidity:
+        return ""
+    try:
+        from src.output.liquidity_formatter import format_liquidity_section
+
+        return format_liquidity_section(liquidity)
+    except Exception:
+        return ""

@@ -1462,6 +1462,17 @@ Output formatters for screening results (KIK-575: unified renderer).
 - `format_momentum_markdown(results: list[dict]) -> str` — Format momentum/surge screening results.
 - `format_auto_theme_header(themes: list[dict], skipped: list[dict] | None=None) -> str` — Format Grok trending themes header (KIK-440).
 
+### src.output.liquidity_formatter
+
+豬∝虚諤ｧ繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ縺ｮ蜃ｺ蜉帶紛蠖｢ (蝨滓屆險ｭ險域嶌 謠先｡�6-竭･)縲�
+
+- `format_profile(liquidity: dict) -> str`
+- `format_feasibility(feasibility: dict) -> str` — 謗ｨ螂ｨ繧｢繧ｯ繧ｷ繝ｧ繝ｳ縺ｮ螳溯｡悟庄閭ｽ諤ｧ縲ょ｣ｲ繧後↑縺�謗ｨ螂ｨ縺ｯ謗ｨ螂ｨ縺ｧ縺ｯ縺ｪ縺城尅髻ｳ縲�
+- `format_buying_power(power: dict) -> str` — 證ｴ關ｽ譎ゅ↓雋ｷ縺�驥代′縺ゅｋ縺九ら┌縺代ｌ縺ｰ縲瑚ｨ育判縲阪〒縺ｯ縺ｪ縺�縲�
+- `format_account_asymmetry(asymmetry: dict) -> str` — NISA 縺ｮ荳区婿髱槫ｯｾ遘ｰ縲よ律譛ｬ縺ｮ蛟倶ｺｺ謚戊ｳ�螳ｶ縺ｫ縺ｨ縺｣縺ｦ讌ｵ繧√※驥崎ｦ√�
+- `format_liquidity_section(bundle: dict) -> str` — 豬∝虚諤ｧ繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ蜈ｨ菴薙�
+- `format_compact(bundle: dict) -> str` — 髱咏ｩ城ｱ逕ｨ縺ｮ1陦檎沿縲�
+
 ### src.output.marginal_formatter
 
 髯千阜蟇�荳弱せ繧ｯ繝ｪ繝ｼ繝九Φ繧ｰ縺ｮ蜃ｺ蜉帶紛蠖｢ (蝨滓屆險ｭ險域嶌 謠先｡�2-竭･)縲�
