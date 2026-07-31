@@ -109,6 +109,31 @@ def _print_recurring_picks(results):
         pass
 
 
+def _print_marginal_view(results, args):
+    """限界寄与（保有考慮後）の評価を追記する (土曜設計書 提案2)。
+
+    保有者にとっての正しい問いは「この銘柄は良いか」ではなく
+    **「私が既に持っているものに何を足すか」**である。
+
+    `--standalone` 指定時、保有が無いとき、因子が取れないときは何も出さない
+    （＝従来の出力と完全に一致する。非破壊）。
+    """
+    if getattr(args, "standalone", False):
+        return
+    if not results:
+        return
+    try:
+        from src.core.screening.marginal_bridge import build_marginal_view, render
+
+        view = build_marginal_view(results)
+        text = render(view, limit=min(len(results), 10))
+        if text:
+            print(text)
+    except Exception:
+        # 限界評価が落ちてもスクリーニング本体は成功させる
+        pass
+
+
 def _print_graphrag_context(results):
     """Print GraphRAG context from knowledge graph (KIK-452, KIK-532).
 
@@ -184,6 +209,7 @@ def _run_single_region(spec, region_code, args):
 
     # Format and print results
     print(spec.formatter(results))
+    _print_marginal_view(results, args)
     _print_recurring_picks(results)
     _print_graphrag_context(results)
     _save_history(spec.preset, region_code, results, sector=args.sector, theme=args.theme)
@@ -462,6 +488,12 @@ def main():
         help="Grok APIでトレンドテーマを自動検出し、各テーマでスクリーニングを実行。XAI_API_KEY必須。",
     )
     parser.add_argument("--top", type=int, default=20)
+    parser.add_argument(
+        "--standalone",
+        action="store_true",
+        default=False,
+        help="限界寄与（保有考慮後）の評価を行わず、単独スコアのみで表示する（従来動作）",
+    )
     parser.add_argument(
         "--with-pullback",
         action="store_true",

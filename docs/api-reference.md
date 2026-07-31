@@ -697,6 +697,23 @@ Screen stocks for growth characteristics.
 
 - `screen(region: str='jp', top_n: int=20, sector: Optional[str]=None, theme: Optional[str]=None, criteria_overrides: Optional[dict]=None) -> list[dict]` — Run the two-step growth screening pipeline.
 
+### src.core.screening.marginal
+
+髯千阜蟇�荳弱せ繧ｯ繝ｪ繝ｼ繝九Φ繧ｰ 窶� 逶ｮ逧�髢｢謨ｰ縺ｮ蜿崎ｻ｢ (蝨滓屆險ｭ險域嶌 謠先｡�2)縲�
+
+- `complement_factor(candidate_betas: dict, pf_betas: dict, *, tilt_threshold: float=TILT_THRESHOLD, unstable_factors: Optional[list]=None) -> dict` — 蛟呵｣懊′ PF 縺ｮ蝗蟄仙￥繧翫ｒ縺ｩ繧後□縺第遠縺｡豸医☆縺九ｒ 0.3縲�1.6 縺ｮ菫よ焚縺ｧ霑斐☆縲�
+- `marginal_score(candidate: dict, pf_exposure: dict, candidate_exposure: Optional[dict]=None, *, twins: Optional[list[dict]]=None, min_standalone: float=..., stress_correlations: Optional[dict]=None) -> dict` — 蛟呵｣�1莉ｶ縺ｮ髯千阜繧ｹ繧ｳ繧｢繧定ｨ育ｮ励☆繧九�
+- `rank_candidates(candidates: list[dict], pf_exposure: dict, exposures: Optional[dict]=None, *, holdings_returns: Optional[dict]=None, min_standalone: float=...) -> dict` — 蛟呵｣懃ｾ､繧帝剞逡後せ繧ｳ繧｢縺ｧ荳ｦ縺ｹ譖ｿ縺医ｋ縲�
+- `lookthrough_exposure(holdings: list[dict], etf_holdings: Optional[dict]=None) -> dict` — ETF 縺ｮ荳ｭ霄ｫ繧帝壹＠縺溷ｮ溯ｳｪ菫晄怏豈皮紫縲�
+
+### src.core.screening.marginal_bridge
+
+髯千阜蟇�荳弱せ繧ｯ繝ｪ繝ｼ繝九Φ繧ｰ縺ｮ驟咲ｷ� (蝨滓屆險ｭ險域嶌 謠先｡�2-竭､)縲�
+
+- `load_portfolio_holdings() -> list[dict]` — 騾ｱ谺｡縺ｮ菫晄怏螳夂ｾｩ縺九ｉ縲∝屏蟄占ｨ育ｮ励↓蠢�隕√↑譛蟆上�ｮ菫晄怏繝薙Η繝ｼ繧剃ｽ懊ｋ縲�
+- `build_marginal_view(candidates: list[dict], holdings: Optional[list[dict]]=None, *, include_twins: bool=True, min_standalone: Optional[float]=None) -> dict` — 蛟呵｣懃ｾ､縺ｫ髯千阜繧ｹ繧ｳ繧｢繧剃ｻ倥￠縲￣F 縺ｮ蝗蟄仙￥繧翫→菴ｵ縺帙※霑斐☆縲�
+- `render(view: dict, limit: int=10) -> str` — 髯千阜蟇�荳弱そ繧ｯ繧ｷ繝ｧ繝ｳ繧呈枚蟄怜�励↓縺吶ｋ縲らｸｮ騾譎ゅ�ｯ遏ｭ縺�豕ｨ險倥□縺題ｿ斐☆縲�
+
 ### src.core.screening.momentum
 
 Momentum technical indicators for momentum-based screening.
@@ -1444,6 +1461,15 @@ Output formatters for screening results (KIK-575: unified renderer).
 - `format_contrarian_markdown(results: list[dict]) -> str` — Format contrarian screening results (3-axis scoring).
 - `format_momentum_markdown(results: list[dict]) -> str` — Format momentum/surge screening results.
 - `format_auto_theme_header(themes: list[dict], skipped: list[dict] | None=None) -> str` — Format Grok trending themes header (KIK-440).
+
+### src.output.marginal_formatter
+
+髯千阜蟇�荳弱せ繧ｯ繝ｪ繝ｼ繝九Φ繧ｰ縺ｮ蜃ｺ蜉帶紛蠖｢ (蝨滓屆險ｭ險域嶌 謠先｡�2-竭･)縲�
+
+- `format_portfolio_tilt(pf_exposure: dict, tilt_lines: Optional[list]=None) -> str` — PF 縺ｮ蝗蟄仙￥繧翫ゅそ繧ｯ繧ｿ繝ｼHHI縺ｧ縺ｯ邨ｶ蟇ｾ縺ｫ隕九∴縺ｪ縺�霆ｸ縲�
+- `format_ranked(result: dict, limit: int=10) -> str` — 髯千阜繧ｹ繧ｳ繧｢鬆�縺ｮ蛟呵｣應ｸ隕ｧ縲�
+- `format_lookthrough(lookthrough: dict) -> str` — ETF 繝ｫ繝�繧ｯ繧ｹ繝ｫ繝ｼ隴ｦ蜻翫�ETF豈皮紫縺碁ｫ倥＞縺ｻ縺ｩ陦ｨ遉ｺ荳翫�ｮ蛻�謨｣縺ｯ陌壽ｧ九↓縺ｪ繧九�
+- `format_marginal_section(pf_exposure: dict, ranked: dict, tilt_lines: Optional[list]=None, lookthrough: Optional[dict]=None, limit: int=10) -> str` — 髯千阜蟇�荳弱そ繧ｯ繧ｷ繝ｧ繝ｳ蜈ｨ菴薙�
 
 ### src.output.portfolio_formatter
 
