@@ -89,6 +89,34 @@ python scripts/weekly_deep_driver.py --restart        # 途中状態を捨てて
 python scripts/weekly_report.py                       # 旧・薄い版
 ```
 
+### ⚠️ スケジュール設定の必須要件（2026-08-01 に2回連続で未実行だった）
+
+作成直後のタスクは既定値が全部不利で、**7/25 と 8/1 の2回とも発火しなかった**。
+`LastRunTime` が `1999/11/30`（＝一度も実行なし）だったことで発覚した。
+
+| 設定 | 必須値 | これが違うと |
+|:---|:---|:---|
+| `WakeToRun` | **True** | 7:12 にスリープ中なら起こされず発火しない |
+| `StartWhenAvailable` | **True** | 逃した回を**Windowsが破棄**し、NextRunTime が翌週へ飛ぶ |
+| `DisallowStartIfOnBatteries` | **False** | バッテリー駆動だと起動しない |
+| `StopIfGoingOnBatteries` | **False** | 実行中に電源が抜けると止まる |
+
+**`StartWhenAvailable` が決定打。** これが False だと、一度逃した回は自動では
+二度と実行されず、`NextRunTime` だけが次週に進む（今回そうなった）。
+
+```powershell
+$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
+     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+     -ExecutionTimeLimit (New-TimeSpan -Hours 72)
+$s.MultipleInstances = 'IgnoreNew'
+Set-ScheduledTask -TaskName 'WeeklyDeep' -TaskPath '\StockSkills\' -Settings $s
+```
+
+**手動実行と `WeeklyDeepResume` の競合に注意。** Resume は3時間ごとに起動して
+未完了 state を書き継ぐ。手で `weekly_deep_driver.py` を回している間は
+`Disable-ScheduledTask -TaskName 'WeeklyDeepResume'` で止め、
+**終わったら必ず `Enable-ScheduledTask` で戻す**。
+
 タスクの状態確認:
 
 ```powershell
