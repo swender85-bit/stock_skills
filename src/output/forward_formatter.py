@@ -24,7 +24,8 @@ def _weight(v: Any) -> str:
 _KIND_ORDER = {"fomc": 0, "economic": 1, "earnings": 2, "ex_dividend": 3}
 
 
-def format_calendar(calendar: dict) -> str:
+def format_calendar(calendar: dict,
+                    resolved_via_lookthrough: Optional[list] = None) -> str:
     if not calendar:
         return "■ 翌週の確定イベント\n  取得できませんでした。\n"
 
@@ -52,9 +53,60 @@ def format_calendar(calendar: dict) -> str:
         lines.append(f"  [折り畳み] 評価額比が小さいイベント {len(folded)}件")
     missing = calendar.get("unavailable_symbols") or []
     if missing:
-        lines.append(f"  ⚠️ 日程を取得できなかった銘柄: {', '.join(missing)}")
-        lines.append("     → これは「予定なし」ではありません。**取得できませんでした。**")
+        expanded = set(resolved_via_lookthrough or [])
+        etf = [s for s in missing if s in expanded]
+        truly_missing = [s for s in missing if s not in expanded]
+        if etf:
+            # ETF に決算は「無い」。取得失敗と混同しない。中身に読み替えた旨を書く。
+            lines.append(f"  ℹ️ {', '.join(etf)} は ETF/投信のため決算がありません。"
+                         "中身の企業の決算に読み替えました（下記ルックスルー参照）。")
+        if truly_missing:
+            lines.append(f"  ⚠️ 日程を取得できなかった銘柄: {', '.join(truly_missing)}")
+            lines.append("     → これは「予定なし」ではありません。**取得できませんでした。**")
     lines.append(f"  ℹ️ {calendar.get('note')}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def format_lookthrough_events(bundle: dict) -> str:
+    """ETF経由で曝されている翌週の決算（提案4の穴を埋める節）。"""
+    lt = bundle.get("lookthrough") or {}
+    ev = bundle.get("lookthrough_events") or {}
+    if not lt.get("available"):
+        return ""
+
+    lines = ["  ETFルックスルー（中身の企業への実質エクスポージャー）", ""]
+
+    top = (lt.get("effective") or [])[:8]
+    if top:
+        for r in top:
+            via = "直接" if r.get("direct_pct") and not r.get("via_etf_pct") else \
+                  "、".join(str(s) for s in (r.get("sources") or []))
+            lines.append(f"     {r['symbol']:<8} 実質 {r['effective_pct']:>5.1f}%"
+                         f"（{via}）")
+        lines.append("")
+
+    if ev.get("available") and ev.get("events"):
+        lines.append(f"  ⚠️ {ev.get('message')}")
+        for e in ev["events"]:
+            lines.append(f"     {e.get('day_label')}  {e.get('symbol')} 決算 — "
+                         f"実質 {e.get('effective_pct'):.1f}%")
+        lines.append("")
+    elif ev.get("available"):
+        lines.append(f"  ✅ {ev.get('message')}")
+        lines.append("")
+
+    unresolved = lt.get("unresolved") or []
+    if unresolved:
+        lines.append(f"  ⚠️ 中身を展開できなかった保有 {len(unresolved)}件")
+        for u in unresolved:
+            lines.append(f"     {u.get('symbol') or u.get('name')} — {u.get('reason')}")
+        lines.append("     → 中身が無いのではなく、構成を取得できていません。")
+        lines.append("")
+
+    lines.append(f"  ℹ️ {lt.get('note')}")
+    if ev.get("caveat"):
+        lines.append(f"  ℹ️ {ev['caveat']}")
     lines.append("")
     return "\n".join(lines)
 
@@ -194,9 +246,13 @@ def format_forward_section(bundle: dict) -> str:
     if not bundle:
         return "■ 翌週の確定イベント\n  取得できませんでした。\n"
 
+    lt = bundle.get("lookthrough") or {}
+    expanded = [r.get("symbol") for r in (lt.get("resolved_etfs") or [])
+                if r.get("symbol")]
     parts = [
-        format_calendar(bundle.get("calendar") or {}),
+        format_calendar(bundle.get("calendar") or {}, expanded),
         format_concentration(bundle.get("concentration") or {}),
+        format_lookthrough_events(bundle),
         format_policy_gaps(bundle.get("policy_gaps") or {}),
         format_triggers(bundle.get("triggers") or {}),
         format_dividend_drops(bundle.get("dividend_drops") or {}),

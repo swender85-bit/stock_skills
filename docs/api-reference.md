@@ -619,6 +619,17 @@ Correlation analysis and VaR computation for portfolio stress testing (KIK-352).
 - `decompose_factors(portfolio_data: list[dict], factor_histories: dict[str, list[float]]) -> list[dict]` — Run factor regression for each portfolio stock.
 - `compute_var(portfolio_data: list[dict], weights: list[float], confidence_levels: tuple[float, ...]=(0.95, 0.99), total_value: Optional[float]=None) -> dict` — Compute historical Value-at-Risk for a portfolio.
 
+### src.core.risk.etf_lookthrough
+
+ETF 繝ｫ繝�繧ｯ繧ｹ繝ｫ繝ｼ 窶� 荳ｭ霄ｫ縺ｮ莨∵･ｭ縺ｮ繧､繝吶Φ繝医↓縲∬�ｪ蛻�縺御ｽ�%譖昴＆繧後※縺�繧九°縲�
+
+- `load_config(path: str=DEFAULT_CONFIG) -> dict`
+- `reset_config_cache() -> None`
+- `resolve_proxy(symbol: Optional[str], name: Optional[str]=None, cfg: Optional[dict]=None) -> dict` — 縺薙�ｮ菫晄怏縺ｮ荳ｭ霄ｫ繧定ｦ九ｋ縺溘ａ縺ｫ縲√←縺ｮ繝�繧｣繝�繧ｫ繝ｼ繧定ｪｿ縺ｹ繧後�ｰ繧医＞縺九�
+- `fetch_holdings(ticker: str, *, cfg: Optional[dict]=None, cache_path: str=DEFAULT_CACHE, use_cache: bool=True) -> dict` — ETF 縺ｮ荳贋ｽ肴ｧ区�宣釜譟�縺ｨ蜀�驛ｨ繧ｦ繧ｧ繧､繝医ｒ霑斐☆縲�
+- `build_lookthrough(holdings: list[dict], *, cfg: Optional[dict]=None, use_cache: bool=True) -> dict` — 菫晄怏繧偵御ｸｭ霄ｫ縺ｮ莨∵･ｭ縲阪∪縺ｧ螻暮幕縺励∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ繧貞粋邂励☆繧九�
+- `lookthrough_events(lookthrough: dict, *, as_of=None, events_by_symbol: Optional[dict]=None, min_effective_pct: Optional[float]=None) -> dict` — 螻暮幕縺励◆讒区�宣釜譟�縺ｮ鄙碁ｱ繧､繝吶Φ繝医ｒ縲∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ莉倥″縺ｧ霑斐☆縲�
+
 ### src.core.risk.scenario_analysis
 
 Scenario-based causal chain analysis for portfolio stress testing (KIK-341).

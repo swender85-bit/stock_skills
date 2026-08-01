@@ -141,6 +141,8 @@ def build_calendar(
                     "source": ev.get("source"), "fetched_at": ev.get("fetched_at"),
                 })
 
+    # ETF は「決算が無い」のであって「日程が不明」なのではない。
+    # 取得できなかった銘柄のうち ETF/投信は、中身の企業の決算に読み替える。
     events.extend(_macro_events(moomoo, start, end))
     events.sort(key=lambda e: (str(e.get("date") or ""), -(e.get("weight_pct") or 0)))
 
@@ -581,6 +583,22 @@ def build_forward_section(
         out["errors"].append(f"カレンダー: {type(e).__name__}: {e}")
         cal = out["calendar"]
 
+    # ETF/投信は決算を持たないので `unavailable_symbols` に落ちるが、
+    # それは「日程が不明」ではない。中身の企業の決算に読み替える。
+    try:
+        from src.core.risk.etf_lookthrough import (
+            build_lookthrough,
+            lookthrough_events,
+        )
+
+        lt = build_lookthrough(holdings)
+        out["lookthrough"] = lt
+        out["lookthrough_events"] = lookthrough_events(lt, as_of=as_of)
+    except Exception as e:
+        out["lookthrough"] = None
+        out["lookthrough_events"] = None
+        out["errors"].append(f"ETFルックスルー: {type(e).__name__}: {e}")
+
     for name, fn in (
         ("concentration", lambda: event_concentration(cal)),
         ("policy_gaps", lambda: policy_coverage_gaps(cal)),
@@ -613,6 +631,15 @@ def build_forward_section(
         actionable.append({
             "title": f"政策トリガーが成立している銘柄 {len(met)}件",
             "detail": "政策に従った既定行動があります。新たに判断しないでください。"})
+
+    lte = out.get("lookthrough_events") or {}
+    total_lt = lte.get("total_effective_pct") or 0
+    if total_lt >= CONCENTRATION_WARN_PCT:
+        actionable.append({
+            "title": f"ETF経由の実質エクスポージャー {total_lt}% が翌週に決算を通過",
+            "detail": (lte.get("message") or "")
+            + " ETF自体に決算は無くても、中身の企業の決算はレバレッジ倍率で効きます。"})
+
     out["actionable"] = actionable
     return out
 
