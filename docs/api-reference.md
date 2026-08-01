@@ -626,6 +626,7 @@ ETF 繝ｫ繝�繧ｯ繧ｹ繝ｫ繝ｼ 窶� 荳ｭ霄ｫ縺ｮ莨∵･ｭ�
 - `load_config(path: str=DEFAULT_CONFIG) -> dict`
 - `reset_config_cache() -> None`
 - `resolve_proxy(symbol: Optional[str], name: Optional[str]=None, cfg: Optional[dict]=None) -> dict` — 縺薙�ｮ菫晄怏縺ｮ荳ｭ霄ｫ繧定ｦ九ｋ縺溘ａ縺ｫ縲√←縺ｮ繝�繧｣繝�繧ｫ繝ｼ繧定ｪｿ縺ｹ繧後�ｰ繧医＞縺九�
+- `resolve_technical_proxy(symbol: Optional[str], name: Optional[str]=None, cfg: Optional[dict]=None) -> Optional[dict]` — 繝�繧ｯ繝九き繝ｫ繧定ｨ育ｮ励☆繧九◆繧√�ｮ莉｣逅�繝�繧｣繝�繧ｫ繝ｼ縲ら┌縺代ｌ縺ｰ None縲�
 - `fetch_holdings(ticker: str, *, cfg: Optional[dict]=None, cache_path: str=DEFAULT_CACHE, use_cache: bool=True) -> dict` — ETF 縺ｮ荳贋ｽ肴ｧ区�宣釜譟�縺ｨ蜀�驛ｨ繧ｦ繧ｧ繧､繝医ｒ霑斐☆縲�
 - `build_lookthrough(holdings: list[dict], *, cfg: Optional[dict]=None, use_cache: bool=True) -> dict` — 菫晄怏繧偵御ｸｭ霄ｫ縺ｮ莨∵･ｭ縲阪∪縺ｧ螻暮幕縺励∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ繧貞粋邂励☆繧九�
 - `lookthrough_events(lookthrough: dict, *, as_of=None, events_by_symbol: Optional[dict]=None, min_effective_pct: Optional[float]=None) -> dict` — 螻暮幕縺励◆讒区�宣釜譟�縺ｮ鄙碁ｱ繧､繝吶Φ繝医ｒ縲∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ莉倥″縺ｧ霑斐☆縲�
@@ -1540,6 +1541,7 @@ Simulation and what-if output formatters (KIK-447, split from portfolio_formatte
 繝ｬ繝昴�ｼ繝医�ｮ菫晏ｭ假ｼ�Obsidian蜷梧悄�ｼ�upgrade v1.0 Phase 2�ｼ�
 
 - `load_output_config(config_path: Optional[str]=None) -> Dict[str, Any]` — config/output.yaml 繧定ｪｭ繧縲ら┌縺代ｌ縺ｰ繝�繝輔か繝ｫ繝医�
+- `resync_missing(*, pattern: str='騾ｱ谺｡PF蛻�譫神', output_dir: Optional[str]=None, vault_path: Optional[str]=None, config_path: Optional[str]=None) -> Dict[str, Any]` — output/ 縺ｫ縺ゅ▲縺ｦ vault 縺ｫ辟｡縺�繝ｬ繝昴�ｼ繝医ｒ蜀榊酔譛溘☆繧九�
 - `save_and_sync(content: str, filename: str, *, output_dir: Optional[str]=None, vault_path: Optional[str]=None, config_path: Optional[str]=None) -> Dict[str, Any]` — content 繧� output/ 縺ｫ菫晏ｭ倥＠縲」ault 縺ｸ繧ｳ繝斐�ｼ縺励※讀懆ｨｼ縺吶ｋ縲�
 
 ### src.output.verify

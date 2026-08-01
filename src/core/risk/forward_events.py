@@ -42,6 +42,10 @@ DEFAULT_MIN_WEIGHT_PCT = 1.0
 
 _WEEKDAY_JP = ("月", "火", "水", "木", "金", "土", "日")
 
+#: CME 日経225先物。moomoo(US LV3) には日本指数の権限が無いため yfinance で補う。
+#: NKD=F はドル建て、NIY=F は円建て。円建てを優先する。
+NIKKEI_FUTURES_TICKERS = ("NIY=F", "NKD=F")
+
 
 # ---------------------------------------------------------------------------
 # 期間
@@ -240,6 +244,134 @@ def _macro_events(moomoo: Optional[dict], start: date, end: date) -> list[dict]:
 # ---------------------------------------------------------------------------
 # イベント集中度
 # ---------------------------------------------------------------------------
+
+
+#: 「次回決算」として提示する上限期間。これを超える日付は参考値扱い。
+DEFAULT_HORIZON_DAYS = 120
+
+#: 日程の状態。空リストを「取得できなかった」と読ませないための区別。
+SCHEDULE_STATES = ("scheduled", "none_upcoming", "no_earnings", "unavailable")
+
+
+def _fund_kind(symbol: Optional[str], name: Optional[str]) -> Optional[str]:
+    """ETF/投信なら種別を返す。個別株なら None。"""
+    try:
+        from src.core.risk.etf_lookthrough import resolve_proxy
+
+        kind = (resolve_proxy(symbol, name) or {}).get("kind")
+    except Exception:
+        return None
+    return kind if kind in ("leveraged_etf", "fund_proxy", "unmapped_fund") else None
+
+
+def symbol_schedule_status(
+    holdings: list[dict],
+    *,
+    as_of: Optional[date] = None,
+    events_by_symbol: Optional[dict] = None,
+    lookthrough_events: Optional[dict] = None,
+    horizon_days: int = DEFAULT_HORIZON_DAYS,
+) -> dict:
+    """銘柄ごとの日程の**状態**を返す。
+
+    ## なぜこれが要るか
+
+    従来、各銘柄に渡していたのは日程の**リスト**だけだった。リストが空のとき、
+    それが「取得に失敗した」のか「取得できたが翌週は予定が無い」のかを
+    区別する情報がどこにも無く、結果として**予定が無いだけの銘柄まで
+    一律に「取得できなかった」と書かれていた**。
+
+    空であることは状態ではない。状態を明示的に持たせる。
+
+    | status | 意味 |
+    |:---|:---|
+    | `scheduled` | 翌週に確定イベントがある |
+    | `none_upcoming` | 取得成功。翌週は無い（次回日付があれば添える） |
+    | `no_earnings` | ETF/投信。決算という概念が無い → 中身に読み替える |
+    | `unavailable` | **本当に取得できなかった** |
+    """
+    as_of = as_of or date.today()
+    start, end = next_week_range(as_of)
+    symbols, weights, names = _aggregate_holdings(holdings)
+    if events_by_symbol is None:
+        events_by_symbol = _safe_fetch_events(symbols)
+
+    lt_by_symbol: dict[str, list] = {}
+    for e in (lookthrough_events or {}).get("events") or []:
+        for src in e.get("via") or e.get("sources") or []:
+            lt_by_symbol.setdefault(str(src), []).append(e)
+
+    out: dict[str, dict] = {}
+    for sym in symbols:
+        ev = events_by_symbol.get(sym) or {}
+        fund = _fund_kind(sym, names.get(sym))
+        row: dict[str, Any] = {
+            "symbol": sym,
+            "name": names.get(sym),
+            "weight_pct": weights.get(sym),
+            "fetched": bool(ev.get("available")),
+            "source": ev.get("source"),
+            "fetched_at": ev.get("fetched_at"),
+            "error": ev.get("error"),
+            "is_fund": bool(fund),
+            "next_earnings": None,
+            "days_until": None,
+            "in_next_week": False,
+            "ex_dividend_date": ev.get("ex_dividend_date"),
+        }
+
+        upcoming = sorted(d for d in (_parse(i) for i in ev.get("earnings_dates") or [])
+                          if d and d >= as_of)
+        if upcoming:
+            nxt = upcoming[0]
+            row["next_earnings"] = nxt.isoformat()
+            row["days_until"] = (nxt - as_of).days
+            row["in_next_week"] = start <= nxt <= end
+            row["beyond_horizon"] = row["days_until"] > horizon_days
+
+        ex = _parse(ev.get("ex_dividend_date"))
+        ex_next_week = False
+        if ex:
+            record_day = prior_business_day(ex) if _is_jp(sym) else ex
+            ex_next_week = start <= record_day <= end
+
+        # ETF/投信は決算を持たない。これは欠測ではなく性質。
+        if fund:
+            comps = lt_by_symbol.get(sym) or []
+            row["status"] = "no_earnings"
+            row["fund_kind"] = fund
+            row["component_events"] = comps
+            row["label"] = (
+                f"ETF/投信のため決算はありません。中身の企業では翌週 {len(comps)}件"
+                f"の決算があります（実質 "
+                f"{round(sum(c.get('effective_pct') or 0 for c in comps), 1)}%）。"
+                if comps else
+                "ETF/投信のため決算はありません。中身の企業にも翌週の決算は"
+                "検出されませんでした。")
+        elif row["in_next_week"] or ex_next_week:
+            row["status"] = "scheduled"
+            bits = []
+            if row["in_next_week"]:
+                bits.append(f"{row['next_earnings']} 決算")
+            if ex_next_week:
+                bits.append("配当権利日")
+            row["label"] = "翌週に " + "・".join(bits) + " があります。"
+        elif row["fetched"]:
+            row["status"] = "none_upcoming"
+            if row["next_earnings"]:
+                row["label"] = (
+                    f"取得済み。翌週に予定はありません。次回決算は "
+                    f"{row['next_earnings']}（あと {row['days_until']}日）。")
+            else:
+                row["label"] = ("取得済み。翌週に予定はなく、次回決算日も"
+                                "未公表です（企業側が未発表）。")
+        else:
+            row["status"] = "unavailable"
+            row["label"] = ("⚠️ 日程を**取得できませんでした**。"
+                            "「予定なし」ではありません。"
+                            + (f"（{row['error']}）" if row.get("error") else ""))
+        out[sym] = row
+    return out
 
 
 def event_concentration(calendar: dict, kinds: tuple[str, ...] = ("earnings",)) -> dict:
@@ -482,10 +614,13 @@ def monday_outlook(indices: Optional[list[dict]] = None,
         out["available"] = True
         out["gap_pct"] = round(gap, 2)
         direction = "上" if gap > 0 else ("下" if gap < 0 else "ほぼ変わらず")
+        # 「上回って」を固定文言にすると、下落時に「-1.82% 上回って」と出る。
+        side = "上回って" if gap > 0 else "下回って"
+        src = (futures or {}).get("source") or "不明"
         out["message"] = (
-            f"日経225先物（週末値 {fut:,.0f}）は東証終値（{close:,.0f}）を "
-            f"{gap:+.2f}% 上回って引けています。月曜は{direction}寄りで始まる"
-            "可能性が織り込まれています。" if gap else
+            f"日経225先物（週末値 {fut:,.0f} / 出典 {src}）は東証終値"
+            f"（{close:,.0f}）を {abs(gap):.2f}% {side}引けています。"
+            f"月曜は{direction}寄りで始まる可能性が織り込まれています。" if gap else
             "先物は東証終値とほぼ同水準です。")
     else:
         out["message"] = ("日経225先物の週末値が取得できず、月曜寄付の織り込みは"
@@ -504,6 +639,23 @@ def _nikkei_futures(moomoo: Optional[dict]) -> Optional[dict]:
         if isinstance(v, dict) and isinstance(v.get("price"), (int, float)):
             return {"price": v["price"], "source": "moomoo",
                     "as_of": v.get("as_of")}
+
+    # moomoo が無くても CME 日経先物は yfinance から取れる。
+    # moomoo 単一依存のままだと、US LV3 に日本指数の権限が無いせいで
+    # 「月曜寄付の織り込みは提示できない」が毎週出続ける。
+    for ticker in NIKKEI_FUTURES_TICKERS:
+        try:
+            import yfinance as yf
+
+            hist = yf.Ticker(ticker).history(period="5d")
+            if hist is None or hist.empty:
+                continue
+            price = float(hist["Close"].dropna().iloc[-1])
+            stamp = hist.index[-1]
+            return {"price": price, "source": f"yfinance:{ticker}",
+                    "as_of": getattr(stamp, "isoformat", lambda: str(stamp))()}
+        except Exception:
+            continue
     return None
 
 
@@ -598,6 +750,15 @@ def build_forward_section(
         out["lookthrough"] = None
         out["lookthrough_events"] = None
         out["errors"].append(f"ETFルックスルー: {type(e).__name__}: {e}")
+
+    # 銘柄ごとの日程の「状態」。空リストを取得失敗と誤読させないための材料。
+    try:
+        out["schedule_status"] = symbol_schedule_status(
+            holdings, as_of=as_of, events_by_symbol=events_by_symbol,
+            lookthrough_events=out.get("lookthrough_events"))
+    except Exception as e:
+        out["schedule_status"] = {}
+        out["errors"].append(f"日程状態: {type(e).__name__}: {e}")
 
     for name, fn in (
         ("concentration", lambda: event_concentration(cal)),

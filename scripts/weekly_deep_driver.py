@@ -215,6 +215,8 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 "news": (pack.get("holding_news") or {}).get(sym) or [],
                 "forward_schedule": [e for e in pack.get("forward_schedule") or []
                                      if not e.get("symbol") or e.get("symbol") == sym],
+                # 日程の「状態」。空リスト＝取得失敗ではないことを明示する材料。
+                "schedule_status": (pack.get("schedule_status") or {}).get(sym),
                 # 翌週の確定イベント（提案4）はこの銘柄の分だけ渡す
                 "next_week_events": [
                     e for e in (cal.get("events") or []) + (cal.get("folded") or [])
@@ -822,7 +824,16 @@ def main() -> int:
 
     filename = f"週次PF分析_{day}.md"
     try:
-        from src.output.sync import save_and_sync
+        from src.output.sync import resync_missing, save_and_sync
+
+        # 過去に届けたはずのレポートが vault から消えていないか毎回見る。
+        # 8/1 分は同期ログ上「成功」だったのに翌日には消えていた。
+        try:
+            back = resync_missing()
+            for m in back.get("messages", []):
+                log(f"resync: {m}")
+        except Exception as e:
+            log(f"resync: スキップ（{type(e).__name__}）")
 
         result = save_and_sync(report, filename)
         for m in result.get("messages", []):

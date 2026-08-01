@@ -66,6 +66,60 @@ def _versioned_path(dest: str) -> str:
         n += 1
 
 
+def resync_missing(
+    *,
+    pattern: str = "週次PF分析_",
+    output_dir: Optional[str] = None,
+    vault_path: Optional[str] = None,
+    config_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """output/ にあって vault に無いレポートを再同期する。
+
+    2026-08-01 のレポートは、同期ログ上は「コピー成功」と出ていたにもかかわらず
+    翌日には vault から消えていた（コピー自体は再実行すると通る）。原因が
+    vault 側（iCloud の同期・退避）にある以上、**書いた直後に検証するだけでは
+    足りない**。毎回の実行時に「過去に届けたはずのものが今もあるか」を見て、
+    欠けていれば黙って戻す。
+
+    「完了＝実物が届いている」を、一点の検証から継続的な保証に変える。
+    """
+    cfg = load_output_config(config_path)
+    root = _repo_root()
+
+    if output_dir is None:
+        output_dir = cfg.get("local_output_dir") or "output"
+    if not os.path.isabs(output_dir):
+        output_dir = os.path.join(root, output_dir)
+    if vault_path is None:
+        vault_path = cfg.get("obsidian_vault_path") or ""
+
+    result: Dict[str, Any] = {"restored": [], "checked": 0, "available": False,
+                              "messages": []}
+    if not vault_path or not os.path.isdir(vault_path) or not os.path.isdir(output_dir):
+        result["messages"].append("vault または output が無いため再同期をスキップしました。")
+        return result
+
+    result["available"] = True
+    for name in sorted(os.listdir(output_dir)):
+        if not name.startswith(pattern) or not name.endswith(".md"):
+            continue
+        # _v2 等の退避コピーは元ファイルの重複なので対象外
+        result["checked"] += 1
+        dest = os.path.join(vault_path, name)
+        if os.path.exists(dest):
+            continue
+        try:
+            shutil.copy2(os.path.join(output_dir, name), dest)
+            result["restored"].append(name)
+        except Exception as e:
+            result["messages"].append(f"{name} の再同期に失敗: {type(e).__name__}")
+    if result["restored"]:
+        result["messages"].append(
+            f"vault から消えていたレポート {len(result['restored'])}件を復元しました: "
+            + ", ".join(result["restored"]))
+    return result
+
+
 def save_and_sync(
     content: str,
     filename: str,

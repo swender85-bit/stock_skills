@@ -112,6 +112,28 @@ def resolve_proxy(symbol: Optional[str], name: Optional[str] = None,
             "kind": "direct", "approximate": False}
 
 
+def resolve_technical_proxy(symbol: Optional[str], name: Optional[str] = None,
+                            cfg: Optional[dict] = None) -> Optional[dict]:
+    """テクニカルを計算するための代理ティッカー。無ければ None。
+
+    投信は基準価額の時系列が取れず、RSI・%B・52週位置が1つも計算できないため
+    「判定不能」になる。連動対象の**指数そのもの**を使えば方向と過熱度は測れる。
+
+    中身の近似（`fund_proxies`）とは目的が違うので別の表を持つ。
+    値が指数由来であることは呼び出し側が必ず明示すること。
+    """
+    cfg = cfg or load_config()
+    if str(symbol or "").strip():
+        return None  # 自前の価格が取れる銘柄に代理は要らない
+    for key, e in (cfg.get("technical_proxies") or {}).items():
+        if str(key).strip() and str(key).strip() in str(name or ""):
+            proxy = str(e.get("proxy") or "").strip()
+            if proxy:
+                return {"proxy": proxy, "note": e.get("note"),
+                        "matched": key, "approximate": True}
+    return None
+
+
 # ---------------------------------------------------------------------------
 # 構成銘柄
 # ---------------------------------------------------------------------------

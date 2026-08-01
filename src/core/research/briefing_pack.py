@@ -199,6 +199,36 @@ def _compact_technicals(t: Optional[dict]) -> Optional[dict]:
     }
 
 
+def _proxy_technicals(symbol: Optional[str], name: Optional[str]) -> Optional[dict]:
+    """ティッカーを持たない投信のテクニカルを、連動対象指数から代理計算する。
+
+    これが無いと投信は「テクニカル取得できず＝判定不能」になり、
+    2026-08-01 の週次では PF の 6.9%（FANG+）が過熱判定の対象外だった。
+    **指数由来であることを必ず値に持たせる**（基準価額そのものではない）。
+    """
+    try:
+        from src.core.risk.etf_lookthrough import resolve_technical_proxy
+
+        px = resolve_technical_proxy(symbol, name)
+        if not px:
+            return None
+        from src.core.technicals import analyze_prices
+        from src.data import yahoo_client as yc
+
+        hist = yc.get_price_history(px["proxy"], period="2y")
+        closes = [float(x) for x in hist["Close"].dropna().tolist()] if hist is not None else []
+        if not closes:
+            return None
+        t = _compact_technicals(analyze_prices(closes))
+        if t:
+            t["proxy_symbol"] = px["proxy"]
+            t["is_proxy"] = True
+            t["proxy_note"] = px.get("note")
+        return t
+    except Exception:
+        return None
+
+
 def _holding_view(a: dict, prior_index: dict, competitors: dict,
                   total_jpy: float, today: str) -> dict:
     f = a.get("fundamentals") or {}
@@ -223,7 +253,8 @@ def _holding_view(a: dict, prior_index: dict, competitors: dict,
         "week_change_pct": (a.get("week") or {}).get("week_change_pct"),
         "leverage": a.get("leverage"),
         "fundamentals": f,
-        "technicals": _compact_technicals(a.get("technicals")),
+        "technicals": (_compact_technicals(a.get("technicals"))
+                       or _proxy_technicals(a.get("symbol"), a.get("name"))),
         "wow_delta": wow,
         "competitors": competitors.get(a.get("symbol") or ""),
         "note": a.get("note"),
@@ -236,8 +267,34 @@ def _holding_view(a: dict, prior_index: dict, competitors: dict,
 # ---------------------------------------------------------------------------
 
 
-def _forward_schedule(moomoo: dict) -> list[dict]:
+def _forward_schedule(moomoo: dict, forward: Optional[dict] = None) -> list[dict]:
+    """今後の日程を1本の時系列にする。
+
+    以前はこの関数が **moomoo だけ**を材料にしていた。moomoo は opt-in で
+    既定では無効なので、実運用では常に空リストが返り、各銘柄の節は
+    「日程が取得できなかった」と書き続けていた。**取得していなかったのではなく、
+    取得済みの yfinance 由来の日程をこの関数が見ていなかった。**
+
+    そのため yfinance 由来のカレンダー（`forward.calendar`）を第一の材料とし、
+    moomoo は経済指標・FOMC 等の**補完**として重ねる。
+    """
     events: list[dict] = []
+
+    # yfinance 由来（決算・配当）。moomoo の有無に関係なく常に入る。
+    cal = (forward or {}).get("calendar") or {}
+    for e in (cal.get("events") or []) + (cal.get("folded") or []):
+        events.append(dict(e))
+
+    # ETF/投信は自身に決算が無いので、中身の企業の決算を同じ時系列に載せる。
+    for e in ((forward or {}).get("lookthrough_events") or {}).get("events") or []:
+        events.append({
+            "kind": "component_earnings", "date": e.get("date"),
+            "day_label": e.get("day_label"), "symbol": e.get("symbol"),
+            "title": f"{e.get('symbol')} 決算（ETF構成銘柄）",
+            "effective_pct": e.get("effective_pct"), "via": e.get("via"),
+            "source": "etf_lookthrough",
+        })
+
     for e in moomoo.get("economic_events") or []:
         events.append({
             "kind": "economic", "title": e.get("title"),
@@ -714,7 +771,8 @@ def build_portfolio_briefing(
         "holding_news": news.get("holding_news") or {},
         "market_news": news.get("market_news") or [],
         "moomoo": moomoo,
-        "forward_schedule": _forward_schedule(moomoo),
+        "forward_schedule": _forward_schedule(moomoo, forward),
+        "schedule_status": (forward or {}).get("schedule_status") or {},
         "projection": base.get("projection"),
         "scenarios": base.get("scenarios"),
         "positions_assumptions": base.get("positions"),
@@ -757,6 +815,18 @@ def build_symbol_briefing(
         technicals = analyze_prices(closes) if closes else None
     except Exception:
         technicals = None
+
+    # 個別銘柄でも「翌週の日程」は同じ材料で出す。
+    # 以前はここが moomoo 依存だったため、常に「日程を取得できなかった」になっていた。
+    symbol_forward: dict = {}
+    try:
+        from src.core.risk.forward_events import build_forward_section
+
+        symbol_forward = build_forward_section(
+            [{"symbol": symbol, "name": (info or {}).get("name") or symbol,
+              "weight_pct": 100.0}])
+    except Exception:
+        symbol_forward = {}
 
     prior_index = _prior_report_index()
     current = dict(detail or info or {})
@@ -807,6 +877,7 @@ def build_symbol_briefing(
         "news": (news.get("holding_news") or {}).get(symbol) or [],
         "market_news": news.get("market_news") or [],
         "moomoo": moomoo,
-        "forward_schedule": _forward_schedule(moomoo),
+        "forward_schedule": _forward_schedule(moomoo, symbol_forward),
+        "schedule_status": (symbol_forward or {}).get("schedule_status") or {},
         "prior_context": prior_context,
     }

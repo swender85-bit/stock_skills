@@ -200,7 +200,11 @@
 1. **今週の値動きと損益** — `week_change_pct`, `pl_pct`。
 2. **前週からの立ち位置の変化** — `wow_delta` を使い、バリュエーション・テクニカルが
    どう動いたか。**「割安化したのか業績悪化なのか」を判定する。**
-3. **翌週の日程がどう効くか** — `forward.calendar` の該当イベント。
+3. **翌週の日程がどう効くか** — **必ず `schedule_status.status` を先に読む。
+   リストが空であることを「取得できなかった」と書いてはならない。**
+   `scheduled`=翌週に予定あり / `none_upcoming`=取得済みで予定なし（`next_earnings`
+   があれば次回日を書く）/ `no_earnings`=ETF・投信なので決算が無い（`component_events`
+   の中身の決算を実質%付きで書く）/ `unavailable`=**このときだけ**「取得できなかった」。
 4. **競合の含意** — `competitors` の peers と比較した相対的な強弱。
 5. **物語混雑度**（`narrative.crowding` に `available: true` があれば）—
    購入時比で語られる量が何倍になったか。
@@ -298,3 +302,7 @@ lesson の trigger が現状に該当するなら、その学びを明示して�
 python scripts/save_report.py --name "週次PF分析_YYYYMMDD.md" --stdin < report.md
 ```
 output/ 保存 → vault 同期 → 実在検証まで一括で行う。
+
+- テクニカルに `is_proxy: true` があるとき、その値は**その銘柄自身ではなく
+  連動対象指数（`proxy_symbol`）由来**である。必ず「〇〇指数による代理値」と明示し、
+  基準価額そのものの数値として書かない。為替分のずれが残る。
