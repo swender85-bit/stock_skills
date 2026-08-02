@@ -112,6 +112,8 @@ python3 scripts/generate_docs.py check --quiet  # 陳腐化チェック（hook �
 - `docs/skill-catalog.md` — 8スキルのカタログ（概要、コマンド例、Core依存、出力形式）
 - `docs/data-models.md` — stock_info / stock_detail dict スキーマ定義（全フィールド名・型・yfinanceマッピング・正規化ルール）(KIK-524)
 - `docs/api-reference.md` — src/ の public API リファレンス（自動生成, KIK-525）
+- `docs/STRUCTURE.md` — **構造リファレンス**（層・スキル・モジュール・設定・自動化・設計原則・既知の限界）。実走査で作成
+- `docs/STRUCTURE_DEEP.md` — **構造リファレンス 深掘り編**（パックの全キー・関数レベルの不変条件・データフロー実例・縮退マトリクス・実測で確定した外部API制約・用語集）
 - `docs/patterns.md` — 頻出開発タスクのパターンガイド（新プリセット・PFサブコマンド・Neo4jノード・ヘルスチェック指標）(KIK-527)
 
 新しいスキルやノードタイプを追加した場合は対応するドキュメントも更新すること。
