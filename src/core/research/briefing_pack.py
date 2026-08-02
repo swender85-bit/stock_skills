@@ -776,6 +776,7 @@ def build_portfolio_briefing(
         "projection": base.get("projection"),
         "scenarios": base.get("scenarios"),
         "positions_assumptions": base.get("positions"),
+        "vol_calibration": base.get("vol_calibration"),
         "monthly_contribution": monthly_contribution,
         "prior_context": prior_context,
     }

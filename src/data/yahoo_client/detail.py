@@ -170,6 +170,15 @@ def get_stock_info(symbol: str) -> Optional[dict]:
         }
 
         _sanitize_anomalies(result)
+        # 日本株は earningsGrowth が欠けることが多い。損益計算書から導出して埋める。
+        # 埋めなかった場合、「増収が利益に落ちているか不明」という留保付きの分析に
+        # なるが、原資料には答えが載っている（味の素は純利益 +91.6% だった）。
+        try:
+            from src.data.yahoo_client.financials import fill_missing_growth
+
+            fill_missing_growth(result, ticker=ticker)
+        except Exception:
+            pass
         _write_cache(symbol, result)
         return result
 

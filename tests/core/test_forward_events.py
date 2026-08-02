@@ -294,7 +294,10 @@ def test_monday_outlook_never_claims_prediction():
     assert "的中率は記録しません" in out["disclaimer"]
 
 
-def test_monday_outlook_says_unavailable_rather_than_neutral():
+def test_monday_outlook_says_unavailable_rather_than_neutral(monkeypatch):
+    # moomoo も yfinance も落ちた状況を作る。yfinance フォールバックが入って
+    # 以降、単に moomoo を渡さないだけでは「取得不可」にならない。
+    monkeypatch.setattr(fe, "_nikkei_futures", lambda m: None)
     out = fe.monday_outlook([{"symbol": "^N225", "price": 41420.0}], {})
     assert out["available"] is False
     assert "取得できず" in out["message"]

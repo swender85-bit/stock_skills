@@ -143,6 +143,13 @@ def _block_external_io(request, monkeypatch):
     # Finnhub: ensure no API key → is_available() False, no HTTP calls
     monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
 
+    # moomoo(OpenD): ensure no process is launched. `ensure_opend()` starts
+    # OpenD.exe and waits up to 90s for login, which hangs the suite.
+    # `.env` now carries MOOMOO_ENABLED=on and is loaded at import time, so the
+    # flag must be turned off per-test. Tests that exercise moomoo itself set
+    # the variable through their own monkeypatch, which takes precedence.
+    monkeypatch.setenv("MOOMOO_ENABLED", "off")
+
     # In-memory cache: clear between tests to prevent cross-test leaks (KIK-531)
     from src.data.yahoo_client._memory_cache import clear_memory_cache
     clear_memory_cache()

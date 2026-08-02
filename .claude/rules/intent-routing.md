@@ -323,6 +323,22 @@ python .claude/skills/stock-portfolio/scripts/run_portfolio.py reconcile
 **ユーザーが「保有が変わった」と言ったのにCSVが無い場合**は、スクショや口頭の値で
 `config/weekly_holdings.yaml` を直してもよいが、CSV取り込みを勧めること（転記ミスが無い）。
 
+### 取引履歴の取り込み → `scripts/import_rakuten_trades.py`
+
+**「判断したことを実際に実行できたか」（決定生存率）を測るための入力。**
+保有CSV（assetbalance）とは別物で、あちらは「いま何を持っているか」、
+こちらは「いつ何を売買したか」。
+
+```
+「取引履歴取り込んで」「約定履歴入れて」「売買履歴のCSV置いた」 → python scripts/import_rakuten_trades.py
+「ちゃんと実行できてる？」「決定生存率は？」「執行率」        → python scripts/import_rakuten_trades.py --audit
+```
+
+- 入力: 楽天証券Web → マイメニュー → 取引履歴 → 期間指定 → CSVで保存
+- Downloads から自動検出。パス指定は `--path`
+- **見つからない場合は「取引が0件」ではなく「取得できなかった」と報告される。**
+  この2つを混同すると「執行率0%」という嘘の成績が出る
+
 ### 監視ドメイン → `/watchlist`
 
 ```

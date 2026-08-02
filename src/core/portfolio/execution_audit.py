@@ -455,13 +455,33 @@ def _load_decisions(days: int):
 
 
 def _load_executions(days: int):
-    """ブローカーの約定履歴。取れなければ理由を返す。"""
+    """約定履歴。取れなければ理由を返す。
+
+    取得元は**楽天証券の取引履歴CSVが第一**。以前は moomoo だけを見ていたが、
+    この運用では moomoo 口座に資金が無く、実際の売買は全て楽天にある。
+    取得元が実態と食い違っていたため、決定生存率は原理的に永久に測定不能だった。
+    """
+    reasons: list[str] = []
+
+    try:
+        from src.data import rakuten_trades
+
+        r = rakuten_trades.load_trades(days=days)
+        if r.get("available"):
+            return r.get("executions") or [], None
+        reasons.append(f"楽天CSV: {r.get('error')}")
+    except Exception as e:
+        reasons.append(f"楽天CSV: {type(e).__name__}: {e}")
+
+    # moomoo は補助。資金があれば米国分だけ拾える。
     try:
         from src.data.brokers import moomoo_broker
 
         r = moomoo_broker.fetch_executions(days=days)
+        if r.get("available"):
+            return r.get("executions") or [], None
+        reasons.append(f"moomoo: {r.get('error')}")
     except Exception as e:
-        return [], f"約定履歴を取得できません: {type(e).__name__}: {e}"
-    if not r.get("available"):
-        return [], f"約定履歴を取得できません: {r.get('error')}"
-    return r.get("executions") or [], None
+        reasons.append(f"moomoo: {type(e).__name__}: {e}")
+
+    return [], "約定履歴を取得できません（" + " / ".join(reasons) + "）"

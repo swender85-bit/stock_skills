@@ -300,11 +300,44 @@ def build_report_data(
     invested = sum(a["value_jpy"] for a in analyses if a["value_jpy"] is not None)
     total = invested + cash_jpy
 
+    # 前提ボラを実測（250日窓）で較正する。テクニカルの volatility_pct は
+    # 20日窓なので前提σと比較してはならない。詳細は vol_calibration の docstring。
+    from src.core.portfolio.vol_calibration import calibrate_positions
+
+    calib_inputs = []
+    seen_symbols: set = set()
+    for a in analyses:
+        if a["value_jpy"] is None:
+            continue
+        sym = a.get("symbol")
+        # 同一銘柄を複数口座（特定/NISA）で持っていても較正は1回でよい。
+        # 畳まないと「前提が妥当でない銘柄」が口座数だけ重複して数えられる。
+        if sym in seen_symbols:
+            continue
+        seen_symbols.add(sym)
+        calib_inputs.append({
+            "symbol": sym,
+            "assumption": _assumption(a["category"], sym),
+            "closes": _closes((price_data.get(sym or "") or {}).get("history")),
+            "leverage": a["leverage"] or 1,
+        })
+    calibration = calibrate_positions(calib_inputs)
+    calib_by_symbol = {r.get("symbol"): r for r in calibration.get("rows") or []}
+
     positions = []
     for a in analyses:
         if a["value_jpy"] is None:
             continue
         assumption = _assumption(a["category"], a.get("symbol"))
+        cal = calib_by_symbol.get(a.get("symbol")) or {}
+        # 較正できたときだけ採用値に差し替える。差し替えたことは必ず残す。
+        used = cal.get("used_underlying_vol_pct")
+        if cal.get("available") and isinstance(used, (int, float)):
+            assumption = {**assumption,
+                          "annual_vol_pct": used,
+                          "assumed_vol_pct_original": assumption.get("annual_vol_pct"),
+                          "vol_calibrated": True,
+                          "vol_verdict": cal.get("verdict")}
         positions.append(
             {
                 "name": a["name"],
@@ -336,6 +369,7 @@ def build_report_data(
         # 保有構成の取り込み元（楽天CSVなど）。レポートの警告文の分岐に使う。
         "holdings_import": config.get("source") or {},
         "positions": positions,
+        "vol_calibration": calibration,
         "rss_snapshot": rss_snapshot,
         "fx_rate": fx_rate,
         "analyses": analyses,

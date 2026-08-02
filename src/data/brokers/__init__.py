@@ -19,8 +19,33 @@ from src.data.brokers.base import (  # noqa: F401
     snapshot_summary,
 )
 
-#: 既定で試すソース。moomoo は MOOMOO_ENABLED=on のときだけ実際に動く。
-DEFAULT_SOURCES = ("rakuten_csv", "moomoo")
+#: 既定で試す**残高**ソース。
+#:
+#: moomoo は既定から外している。この運用では moomoo 口座に資金が無く、
+#: 実在残高は全て楽天証券にあるため、moomoo を残高ソースとして叩いても
+#: 「US市場の権限を持つ実口座が無い」で必ず `available=False` になる。
+#: 毎週 OpenD を起動して失敗を1件積むだけで、照合の役に立たない。
+#:
+#: **moomoo はニュース・マクロ材料（FedWatch/経済指標/決算カレンダー）専用**として
+#: `briefing_pack._safe_moomoo()` から使う。そちらは実際に機能している。
+#:
+#: moomoo に資金を入れて残高照合に使いたくなったら、`MOOMOO_AS_BALANCE_SOURCE=on`
+#: で戻せる。既定に戻さないのは、**空の口座を残高ソースにすると
+#: 「模型にあるが口座に無い＝幽霊ポジション」を大量生産しかねない**ため。
+#: （現状は available=False が「残高不明」を意味するので誤判定は起きないが、
+#:  そもそも問い合わせない方が安全側。）
+DEFAULT_SOURCES = ("rakuten_csv",)
+
+#: 残高ソースとして moomoo も試したい場合のオプトイン環境変数
+MOOMOO_BALANCE_ENV = "MOOMOO_AS_BALANCE_SOURCE"
+
+
+def _default_sources() -> tuple:
+    import os
+
+    if os.environ.get(MOOMOO_BALANCE_ENV, "").strip().lower() in ("on", "1", "true", "yes"):
+        return DEFAULT_SOURCES + ("moomoo",)
+    return DEFAULT_SOURCES
 
 
 def collect_snapshots(
@@ -34,7 +59,7 @@ def collect_snapshots(
     1つのソースが落ちても他は返す。全部落ちても空リストではなく
     `available=False` のスナップショットを返す（＝理由が残る）。
     """
-    names = list(sources or DEFAULT_SOURCES)
+    names = list(sources or _default_sources())
     out: list[dict] = []
 
     for name in names:

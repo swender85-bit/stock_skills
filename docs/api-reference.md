@@ -1335,6 +1335,19 @@ CSV 縺瑚ｪｭ繧√↑縺�繝ｻ譏守ｴｰ縺瑚ｦ九▽縺九ｉ縺ｪ�
 繧ｹ繝翫ャ繝励す繝ｧ繝�繝医′隱ｭ繧√↑縺�(譛ｪ險ｭ螳壹�ｻ荳榊惠繝ｻ遨ｺ)縲�
 
 
+### src.data.rakuten_trades
+
+讌ｽ螟ｩ險ｼ蛻ｸ縺ｮ蜿門ｼ募ｱ･豁ｴCSV繧堤ｴ�螳壼ｱ･豁ｴ縺ｨ縺励※隱ｭ繧�ｼ域署譯�5 蝓ｷ陦檎屮譟ｻ縺ｮ蜈･蜉幢ｼ峨�
+
+- `normalize_side(value: Any) -> Optional[str]` — 螢ｲ雋ｷ蛹ｺ蛻�繧� buy/sell 縺ｫ豁｣隕丞喧縺吶ｋ縲ょ愛螳壹〒縺阪↑縺代ｌ縺ｰ None縲�
+- `parse_trades(raw: Any) -> dict` — 蜿門ｼ募ｱ･豁ｴCSV�ｼ�bytes / str / 繝代せ�ｼ峨ｒ邏�螳壼ｱ･豁ｴ縺ｫ螟画鋤縺吶ｋ縲�
+- `find_latest(download_dir: Optional[str]=None) -> Optional[str]` — Downloads 縺九ｉ譛譁ｰ縺ｮ蜿門ｼ募ｱ･豁ｴCSV繧呈爾縺吶�
+- `load_trades(path: Optional[str]=None, *, days: Optional[int]=None) -> dict` — 蜿門ｼ募ｱ･豁ｴ繧定ｪｭ繧縲ゅヱ繧ｹ逵∫払譎ゅ�ｯ Downloads 縺九ｉ閾ｪ蜍墓､懷�ｺ縲�
+
+#### class TradeHistoryUnavailable
+CSV 縺瑚ｪｭ繧√↑縺�繝ｻ蜿門ｼ募ｱ･豁ｴ縺ｮ隕句�ｺ縺励′隕九▽縺九ｉ縺ｪ縺�縲�
+
+
 ### src.data.user_profile
 
 User profile settings loader (KIK-599).
@@ -1386,6 +1399,14 @@ Stock info and detail fetching (KIK-449, KIK-531).
 - `clear_event_cache() -> None`
 - `get_symbol_events(symbol: str, use_cache: bool=True) -> dict` — 1驫俶氛縺ｮ豎ｺ邂嶺ｺ亥ｮ壽律繝ｻ驟榊ｽ楢誠縺｡譌･遲峨ｒ霑斐☆縲�
 - `get_events_for(symbols: list[str], use_cache: bool=True) -> dict[str, dict]` — 隍�謨ｰ驫俶氛縲�1驫俶氛縺瑚誠縺｡縺ｦ繧ゆｻ悶�ｯ霑斐☆縲�
+
+### src.data.yahoo_client.financials
+
+謳咲寢險育ｮ玲嶌縺九ｉ謌宣聞邇�繧貞ｰ主�ｺ縺吶ｋ�ｼ�yfinance 縺ｮ豈皮紫繝輔ぅ繝ｼ繝ｫ繝峨′谺縺代◆縺ｨ縺阪�ｮ陬懷ｮ鯉ｼ峨�
+
+- `growth_from_series(values: Optional[list]) -> Optional[float]` — 逶ｴ霑�2譛溘�ｮ謌宣聞邇��ｼ域ｯ皮紫�ｼ峨ょ燕譛溘′繧ｼ繝ｭ莉･荳九↑繧� None縲�
+- `derive_growth(symbol: str, ticker: Any=None) -> dict` — 謳咲寢險育ｮ玲嶌縺九ｉ謌宣聞邇�繧貞ｰ主�ｺ縺吶ｋ縲�
+- `fill_missing_growth(detail: dict, ticker: Any=None) -> dict` — `stock_detail` 縺ｮ谺縺代※縺�繧区�宣聞邇�縺縺代ｒ蟆主�ｺ蛟､縺ｧ蝓九ａ繧九�
 
 ### src.data.yahoo_client.history
 

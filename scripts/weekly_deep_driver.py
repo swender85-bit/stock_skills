@@ -166,6 +166,7 @@ def slice_pack(pack: dict, section: dict) -> dict:
         return {**meta,
                 "constraints": pack.get("constraints"),
                 "positions_assumptions": pack.get("positions_assumptions"),
+                "vol_calibration": pack.get("vol_calibration"),
                 "holdings_overview": [_slim_holding(h)
                                       for h in pack.get("holdings") or []]}
 
@@ -246,6 +247,7 @@ def slice_pack(pack: dict, section: dict) -> dict:
 
     if kind == "limits":
         return {**meta,
+                "vol_calibration": pack.get("vol_calibration"),
                 "positions_assumptions": pack.get("positions_assumptions"),
                 "projection": pack.get("projection")}
 
