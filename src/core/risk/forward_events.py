@@ -209,14 +209,82 @@ def _is_jp(symbol: Optional[str]) -> bool:
     return s.endswith(".T") or s.endswith(".JP")
 
 
-def _macro_events(moomoo: Optional[dict], start: date, end: date) -> list[dict]:
-    """マクロイベント（経済指標・FOMC）。moomoo が無ければ空。
+#: マクロイベントの退避先。moomoo が落ちた週に FOMC が黙って消えるのを防ぐ。
+MACRO_CACHE_PATH = "data/cache/macro_events.json"
 
-    取れないことを「イベントなし」と混同しないよう、上位で
-    `unavailable_symbols` とは別に扱う。
+#: キャッシュをこの時間より古くまで使う。マクロ日程は頻繁には変わらない。
+MACRO_CACHE_MAX_AGE_HOURS = 24 * 21
+
+
+def _macro_cache_path() -> str:
+    import os
+
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    return os.path.join(root, MACRO_CACHE_PATH)
+
+
+def save_macro_cache(moomoo: Optional[dict]) -> bool:
+    """取得できたマクロ材料を退避する。取得できたときだけ上書きする。"""
+    import json
+    import os
+
+    m = moomoo or {}
+    if not (m.get("economic_events") or m.get("fed_watch")):
+        return False
+    try:
+        path = _macro_cache_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "economic_events": m.get("economic_events") or [],
+                "fed_watch": m.get("fed_watch") or {},
+            }, f, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
+def load_macro_cache() -> Optional[dict]:
+    """退避したマクロ材料。古すぎる・読めないなら None。"""
+    import json
+
+    try:
+        with open(_macro_cache_path(), encoding="utf-8") as f:
+            data = json.load(f)
+        stamp = datetime.fromisoformat(str(data.get("fetched_at")))
+        age_h = (datetime.now(timezone.utc) - stamp).total_seconds() / 3600.0
+        if age_h > MACRO_CACHE_MAX_AGE_HOURS:
+            return None
+        data["age_hours"] = round(age_h, 1)
+        return data
+    except Exception:
+        return None
+
+
+def _macro_events(moomoo: Optional[dict], start: date, end: date) -> list[dict]:
+    """マクロイベント（経済指標・FOMC）。
+
+    以前は moomoo だけを見ていたため、**moomoo が一時的に落ちた週は FOMC が
+    黙ってカレンダーから消えていた**。「イベントが無い」と「取得できなかった」の
+    混同そのもので、しかもマクロは保有全体に効くので影響が大きい。
+
+    取得できた週に退避し、落ちた週はそれを使う。使ったことは `source` に残す
+    （`moomoo(cached)`）ので、鮮度を伏せたまま最新であるかのように見せない。
     """
     out: list[dict] = []
     m = moomoo or {}
+    cached_age: Optional[float] = None
+
+    if m.get("economic_events") or m.get("fed_watch"):
+        save_macro_cache(m)
+    else:
+        fallback = load_macro_cache()
+        if fallback:
+            m = fallback
+            cached_age = fallback.get("age_hours")
+
+    suffix = "(cached)" if cached_age is not None else ""
 
     for e in m.get("economic_events") or []:
         d = _parse(e.get("date") or e.get("release_date"))
@@ -226,7 +294,8 @@ def _macro_events(moomoo: Optional[dict], start: date, end: date) -> list[dict]:
             "kind": "economic", "date": d.isoformat(), "day_label": _jp_label(d),
             "title": e.get("title"), "country": e.get("country"),
             "importance": e.get("star"), "consensus": e.get("consensus"),
-            "previous": e.get("previous"), "source": "moomoo",
+            "previous": e.get("previous"), "source": f"moomoo{suffix}",
+            "cached_age_hours": cached_age,
         })
 
     fw = m.get("fed_watch") or {}
@@ -236,7 +305,8 @@ def _macro_events(moomoo: Optional[dict], start: date, end: date) -> list[dict]:
             "kind": "fomc", "date": d.isoformat(), "day_label": _jp_label(d),
             "title": "FOMC 政策金利発表",
             "top_range": fw.get("top_range"), "top_prob": fw.get("top_prob"),
-            "source": "moomoo",
+            "source": f"moomoo{suffix}",
+            "cached_age_hours": cached_age,
         })
     return out
 

@@ -152,6 +152,7 @@
 - ℹ️ **配当落ちの分離**（`dividend_drops`）— 権利落ちの下落は損失ではない。
   週次騰落率から分離して読むよう明示する。
 - ⚠️ 日程変更（`schedule_changes`）— 決算日の変更はしばしば重要なシグナル。
+- マクロイベント（FOMC・経済指標）の `source` が `moomoo(cached)` なら**その週は取得できず退避を使っている**。`cached_age_hours` を添えて鮮度を示し、最新であるかのように書かない。日程は変更され得る。
 - **月曜寄付の見通し**（`monday_outlook`）— 先物・ADR は**予測ではなく市場の織り込み**。
   断定するな。月曜朝の狼狽を事前に無力化するために書く。
 - **ETFルックスルー**（`forward.lookthrough` / `forward.lookthrough_events`）—

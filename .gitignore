@@ -21,3 +21,4 @@ data/reconciliation/
 data/weekly_snapshots/
 data/model_scorecard/
 data/cache/etf_holdings.json
+data/cache/macro_events.json
