@@ -4,8 +4,8 @@
 #    手で直してもよいが、次の取り込みで上書きされる。
 #
 # 出典: 楽天証券「保有商品一覧（すべて）」CSV
-#   assetbalance(all)_20260731_224909.csv
-#   取り込み日時: 2026-07-31T13:49:12+00:00
+#   assetbalance(all)_20260802_154844.csv
+#   取り込み日時: 2026-08-02T06:48:47+00:00
 #
 # ■ 何が自動で、何が手動か
 #   保有構成（銘柄・数量・取得単価） … このCSVを投げたときだけ更新
@@ -23,7 +23,7 @@
 base_currency: JPY
 fx:
   usdjpy_symbol: JPY=X
-  fallback_rate: 159.37
+  fallback_rate: 157.81
 holdings:
 - name: トーメンデバイス
   quote_symbol: 2737.T
@@ -108,5 +108,5 @@ cash:
   note: 2026/7/23時点でほぼ残高なし。INTC弾は MDT/QCOM 取得に投入済み。
 source:
   type: rakuten_csv
-  file: assetbalance(all)_20260731_224909.csv
-  exported_at: '2026-07-31T13:49:12+00:00'
+  file: assetbalance(all)_20260802_154844.csv
+  exported_at: '2026-08-02T06:48:47+00:00'

@@ -33,6 +33,15 @@ from typing import Any, Optional
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+# Windows の既定コンソールは cp932 で、`¥` や絵文字を出そうとすると
+# UnicodeEncodeError で落ちる。実測で「為替 fallback を更新: ¥157/USD」の行が
+# クラッシュした（保有の書き込みが済んだ後に落ちるので、成否が分かりにくい）。
+for _stream in ("stdout", "stderr"):
+    try:
+        getattr(sys, _stream).reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import yaml  # noqa: E402
 
 from src.data.rakuten_csv import (  # noqa: E402
