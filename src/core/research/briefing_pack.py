@@ -869,6 +869,10 @@ def build_symbol_briefing(
             "operating_margin", "revenue_growth", "earnings_growth",
             "dividend_yield", "debt_to_equity", "market_cap", "beta",
             "sector", "industry", "name",
+            # 成長率の出所と期間。これを落とすと、四半期YoYのスパイク
+            # （2737.T の +1043% 等）が注記なしで載る。
+            "growth_derived", "growth_annual", "growth_period_warning",
+            "turned_profitable",
         )} if detail else (info or {}),
         "technicals": _compact_technicals(technicals),
         "wow_delta": wow,

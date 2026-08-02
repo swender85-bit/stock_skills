@@ -1408,7 +1408,7 @@ Stock info and detail fetching (KIK-449, KIK-531).
 
 - `growth_from_series(values: Optional[list]) -> Optional[float]` — 逶ｴ霑�2譛溘�ｮ謌宣聞邇��ｼ域ｯ皮紫�ｼ峨ょ燕譛溘′繧ｼ繝ｭ莉･荳九↑繧� None縲�
 - `derive_growth(symbol: str, ticker: Any=None) -> dict` — 謳咲寢險育ｮ玲嶌縺九ｉ謌宣聞邇�繧貞ｰ主�ｺ縺吶ｋ縲�
-- `fill_missing_growth(detail: dict, ticker: Any=None) -> dict` — `stock_detail` 縺ｮ谺縺代※縺�繧区�宣聞邇�縺縺代ｒ蟆主�ｺ蛟､縺ｧ蝓九ａ繧九�
+- `fill_missing_growth(detail: dict, ticker: Any=None) -> dict` — `stock_detail` 縺ｮ谺縺代※縺�繧区�宣聞邇�繧貞ｰ主�ｺ蛟､縺ｧ蝓九ａ縲∵･ｵ遶ｯ蛟､縺ｫ縺ｯ蟷ｴ蠎ｦ蝓ｺ貅悶ｒ豺ｻ縺医ｋ縲�
 
 ### src.data.yahoo_client.history
 

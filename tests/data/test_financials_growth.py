@@ -178,3 +178,51 @@ def test_fill_survives_a_broken_ticker():
     detail = {"symbol": "X", "earnings_growth": None, "revenue_growth": None}
     fin.fill_missing_growth(detail, ticker=_Boom())
     assert detail["earnings_growth"] is None
+
+
+# ---------------------------------------------------------------------------
+# 期間の違う数字を並べさせない
+# ---------------------------------------------------------------------------
+
+
+def test_quarterly_spike_gets_an_annual_figure_attached():
+    """yfinance の earningsGrowth は四半期YoY。2737.T は +1043% だが年度は +79.2%。"""
+    stmt = _Stmt({"Net Income": [179.2, 100.0], "Total Revenue": [150.3, 100.0]})
+    detail = {"symbol": "2737.T", "earnings_growth": 10.433, "revenue_growth": 2.864}
+    fin.fill_missing_growth(detail, ticker=_Ticker(stmt))
+
+    assert detail["earnings_growth"] == 10.433, "yfinance 値は残す"
+    assert detail["growth_annual"]["earnings_growth"] == pytest.approx(0.792, abs=0.01)
+    assert "四半期YoY" in detail["growth_period_warning"]
+    assert "年度基準の数字を主として" in detail["growth_period_warning"]
+
+
+def test_normal_growth_does_not_trigger_the_extra_fetch():
+    calls = []
+
+    class _Counting:
+        @property
+        def income_stmt(self):
+            calls.append(1)
+            return AJINOMOTO
+
+    detail = {"symbol": "X", "earnings_growth": 0.2, "revenue_growth": 0.1}
+    fin.fill_missing_growth(detail, ticker=_Counting())
+    assert calls == [], "妥当な値なら余計な取得をしない"
+
+
+def test_annual_pair_is_attached_whenever_something_was_derived():
+    """導出したなら、比較可能な年度ベースの対を必ず残す。"""
+    detail = {"symbol": "2802.T", "earnings_growth": None, "revenue_growth": 0.105}
+    fin.fill_missing_growth(detail, ticker=_Ticker(AJINOMOTO))
+    annual = detail["growth_annual"]
+    assert annual["earnings_growth"] == pytest.approx(0.916, abs=0.01)
+    assert annual["revenue_growth"] == pytest.approx(0.035, abs=0.01)
+    assert "期間の違うもの" in annual["note"]
+
+
+def test_negative_extreme_growth_also_triggers_annual_context():
+    stmt = _Stmt({"Net Income": [50.0, 100.0]})
+    detail = {"symbol": "X", "earnings_growth": -4.5, "revenue_growth": 0.1}
+    fin.fill_missing_growth(detail, ticker=_Ticker(stmt))
+    assert detail.get("growth_period_warning")

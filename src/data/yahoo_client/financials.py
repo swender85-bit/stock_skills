@@ -143,22 +143,55 @@ def derive_growth(symbol: str, ticker: Any = None) -> dict:
     return out
 
 
+#: これを超える成長率は四半期YoYのスパイクとみなし、年度ベースを併記する。
+#: yfinance の `earningsGrowth` / `revenueGrowth` は**四半期YoY**なので、
+#: 前年同期がたまたま落ち込んでいると +1000% のような値が普通に出る。
+#: 実測: 2737.T は earningsGrowth=10.433（+1043%）だが年度ベースでは +79.2%。
+#: これを注記なしで載せると、レポートが「利益成長率 +1043%」と書いてしまう。
+IMPLAUSIBLE_GROWTH = 3.0
+
+
 def fill_missing_growth(detail: dict, ticker: Any = None) -> dict:
-    """`stock_detail` の欠けている成長率だけを導出値で埋める。
+    """`stock_detail` の欠けている成長率を導出値で埋め、極端値には年度基準を添える。
 
     **既にある値は上書きしない。** 埋めた項目は `growth_derived` に残す。
+
+    yfinance の比率は四半期YoY、導出値は年度。**同じ行に並べると期間が違う
+    ものを比べることになる**ので、導出したときは年度ベースの対応値も一緒に残す。
     """
     if not detail:
         return detail
     missing = [k for k in ("earnings_growth", "revenue_growth")
                if detail.get(k) is None]
-    if not missing:
+    # 欠けていなくても、四半期YoYのスパイクは年度基準を添えないと誤読される。
+    extreme = [k for k in ("earnings_growth", "revenue_growth")
+               if isinstance(detail.get(k), (int, float))
+               and abs(detail[k]) > IMPLAUSIBLE_GROWTH]
+    if not missing and not extreme:
         return detail
 
     derived = derive_growth(detail.get("symbol") or "", ticker=ticker)
     if not derived.get("available"):
         detail["growth_derivation_error"] = derived.get("error")
         return detail
+
+    # 期間の違う数字を同じ行に並べさせないため、年度ベースを常に残す。
+    detail["growth_annual"] = {
+        "earnings_growth": derived.get("earnings_growth"),
+        "revenue_growth": derived.get("revenue_growth"),
+        "operating_income_growth": derived.get("operating_income_growth"),
+        "eps_growth": derived.get("eps_growth"),
+        "periods": derived.get("periods"),
+        "source": "income_stmt",
+        "note": ("yfinance の成長率は**四半期YoY**、こちらは**年度**。"
+                 "同じ行に並べると期間の違うものを比較することになる。"),
+    }
+    if extreme:
+        detail["growth_period_warning"] = (
+            f"{', '.join(extreme)} は四半期YoYで "
+            + ", ".join(f"{detail[k]*100:+.0f}%" for k in extreme)
+            + "。前年同期の落ち込みによるスパイクの可能性が高い。"
+            "年度ベースは `growth_annual` を参照し、**年度基準の数字を主として書くこと。**")
 
     filled: list[str] = []
     for key in missing:
