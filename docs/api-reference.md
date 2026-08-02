@@ -267,6 +267,8 @@ Portfolio concentration analysis module.
 - `parse_condition(raw: Any) -> dict` — 蜿崎ｨｼ譚｡莉ｶ繧� {metric, op, value} 縺ｫ豁｣隕丞喧縺吶ｋ縲�
 - `parse_conditions(raw: Any) -> list[dict]` — 1縺､縺ｧ繧り､�謨ｰ縺ｧ繧ょ女縺代ｋ縲�1縺､縺ｧ繧ょ｣翫ｌ縺ｦ縺�縺溘ｉ蜈ｨ菴薙ｒ諡貞凄縺吶ｋ縲�
 - `market_state_from_holding(holding: dict) -> dict` — 繝代ャ繧ｯ縺ｮ菫晄怏陦後°繧峨∝渚險ｼ譚｡莉ｶ縺ｮ隧穂ｾ｡縺ｫ菴ｿ縺医ｋ迥ｶ諷九ｒ邨�縺ｿ遶九※繧九�
+- `suggest_conditions_from_content(content: Optional[str], symbol: Optional[str]=None) -> list[dict]` — 繝�繝ｼ繧ｼ譛ｬ譁�縺ｫ謨ｰ蛟､縺ｧ譖ｸ縺九ｌ縺滓彫騾繝ｩ繧､繝ｳ繧偵∫匳骭ｲ蜿ｯ閭ｽ縺ｪ譚｡莉ｶ縺ｨ縺励※謠先｡医☆繧九�
+- `evaluate_suggestions(suggestions: list[dict], state: dict) -> list[dict]` — 謠先｡域擅莉ｶ繧堤樟蝨ｨ縺ｮ蟶ょｴ迥ｶ諷九〒隧穂ｾ｡縺吶ｋ縲�
 - `check_thesis(thesis: dict, state: dict) -> dict` — thesis 1莉ｶ縺ｮ蜿崎ｨｼ譚｡莉ｶ繧定ｩ穂ｾ｡縺吶ｋ縲�
 - `check_all(holdings: list[dict], theses_by_symbol: Optional[dict]=None) -> dict` — 菫晄怏蜈ｨ菴薙�ｮ蜿崎ｨｼ譚｡莉ｶ繧堤せ讀懊☆繧九�
 

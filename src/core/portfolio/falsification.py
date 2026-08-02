@@ -160,6 +160,103 @@ def market_state_from_holding(holding: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+#: テーゼ本文から撤退ラインを拾うパターン。
+#: 「撤退ライン $158」「損切り 2400円」「-25% で撤退」など、**数値が書かれている**
+#: ものだけを対象にする。「調子が悪ければ売る」のような曖昧な記述は拾わない。
+_EXIT_PATTERNS: tuple[tuple[str, str], ...] = (
+    # 価格による撤退ライン。
+    # 直前のマイナス記号と直後の % を除外する。除外しないと
+    # 「撤退は -15% を目安に」から `price <= 15` という無意味な条件が出る。
+    (r"(?:撤退|損切|ロスカット|ストップ|stop\s*loss|exit)"
+     r"[^。\n]{0,12}?(?<![-−▲])[\$￥¥]?\s*([\d,]+(?:\.\d+)?)\s*"
+     r"(?:ドル|円|USD|JPY)?(?!\s*[%％])", "price"),
+    # 下落率による撤退ライン
+    (r"[-−▲]\s*([\d.]+)\s*%[^。\n]{0,10}?(?:撤退|損切|売却|手仕舞)", "drawdown_pct"),
+    (r"(?:撤退|損切|売却)[^。\n]{0,10}?[-−▲]\s*([\d.]+)\s*%", "drawdown_pct"),
+)
+
+
+def suggest_conditions_from_content(content: Optional[str],
+                                    symbol: Optional[str] = None) -> list[dict]:
+    """テーゼ本文に数値で書かれた撤退ラインを、登録可能な条件として提案する。
+
+    ## なぜ必要か
+
+    2026-08-01 時点で QCOM のテーゼには「撤退ライン 約$158」と**本文に書かれて
+    いた**が、反証条件としては登録されていなかった。7/29 終値は $155.68 で
+    **既に割れていたのに、システムは検出しなかった**。レポートは
+    「反証条件が未定義です」という一般的な促しを出しただけだった。
+
+    書いてあるのに拾えないのは、促しの問題ではなく抽出の問題である。
+
+    ## 設計
+
+    **提案するだけで、自動登録はしない。** 条件の確定は判断であり、
+    本文の言い回しから機械が断定してよい種類のものではない。
+    """
+    text = str(content or "")
+    if not text.strip():
+        return []
+
+    out: list[dict] = []
+    seen: set = set()
+    for pattern, metric in _EXIT_PATTERNS:
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            raw = m.group(1).replace(",", "")
+            try:
+                value = float(raw)
+            except ValueError:
+                continue
+            if value <= 0:
+                continue
+            if metric == "drawdown_pct":
+                value = -abs(value)
+            key = (metric, value)
+            if key in seen:
+                continue
+            seen.add(key)
+            expr = f"{metric} <= {value:g}"
+            out.append({
+                "metric": metric,
+                "op": "<=",
+                "value": value,
+                "expression": expr,
+                "matched_text": m.group(0).strip(),
+                "confidence": "本文に数値で書かれていた記述からの抽出",
+                "how_to": (
+                    "python .claude/skills/investment-note/scripts/manage_note.py "
+                    f'save --symbol {symbol or "<SYMBOL>"} --type thesis '
+                    f'--falsification "{expr}"'),
+            })
+    return out
+
+
+def evaluate_suggestions(suggestions: list[dict], state: dict) -> list[dict]:
+    """提案条件を現在の市場状態で評価する。
+
+    **既に割れているかどうか**をここで出す。書いてあるのに登録されておらず、
+    しかも既に割れている、という状態を可視化するのが目的。
+    """
+    from src.core.policy.evaluator import evaluate_trigger
+
+    out: list[dict] = []
+    for s in suggestions or []:
+        row = dict(s)
+        try:
+            ev = evaluate_trigger(
+                {"metric": s["metric"], "op": s["op"], "value": s["value"]}, state)
+            row.update({"state": ev.get("state"), "actual": ev.get("actual")})
+            if ev.get("state") == "met":
+                row["message"] = (
+                    f"⚠️ **本文に書かれた撤退ライン（{s['expression']}）は既に成立しています**"
+                    f"（実測 {_fmt(ev.get('actual'))}）。"
+                    "反証条件として登録されていないため、週次では検出されていませんでした。")
+        except Exception:
+            row["state"] = "unknown"
+        out.append(row)
+    return out
+
+
 def check_thesis(thesis: dict, state: dict) -> dict:
     """thesis 1件の反証条件を評価する。
 
@@ -172,12 +269,31 @@ def check_thesis(thesis: dict, state: dict) -> dict:
     symbol = thesis.get("symbol") or ""
     raw = thesis.get("falsification")
     if not raw:
+        # 本文に数値の撤退ラインが書かれていないか探す。書いてあるのに
+        # 未登録で、しかも既に割れている、という事故が実際に起きている。
+        suggestions = evaluate_suggestions(
+            suggest_conditions_from_content(thesis.get("content"), symbol), state)
+        breached = [s for s in suggestions if s.get("state") == "met"]
+        if breached:
+            message = (
+                "反証条件は未登録ですが、**本文に書かれた撤退ラインは既に成立しています**"
+                f"（{', '.join(s['expression'] for s in breached)}）。"
+                "登録されていないため週次の点検対象になっていませんでした。")
+        elif suggestions:
+            message = (
+                "反証条件が未定義です。ただし本文に数値の撤退ラインが書かれています"
+                f"（{', '.join(s['expression'] for s in suggestions)}）。"
+                "これを反証条件として登録すれば、週次で自動点検されます。")
+        else:
+            message = "反証条件が未定義です。何が起きたら間違いと認めるかが書かれていません。"
         return {
             "symbol": symbol, "note_id": thesis.get("id"),
             "content": thesis.get("content"), "date": thesis.get("date"),
             "has_falsification": False, "conditions": [], "falsified": False,
             "state": "undefined",
-            "message": "反証条件が未定義です。何が起きたら間違いと認めるかが書かれていません。",
+            "suggestions": suggestions,
+            "suggested_breached": bool(breached),
+            "message": message,
         }
 
     try:
