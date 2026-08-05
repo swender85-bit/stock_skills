@@ -30,8 +30,12 @@
 meta:
   # 1回の取得で1アカウントあたり取りにいく最大件数
   max_posts_per_fetch: 20
+  # trust: primary の情報源はこの倍だけ多く取る
+  trust_fetch_multiplier: 2
   # 既定の遡り日数
   default_days: 7
+  # trust: primary はこの日数まで遡る（見落としを減らす）
+  trust_default_days: 14
   # 方向の言明を検証するまでの既定期間（日）。明示が無いときに使う
   default_horizon_days: 30
 
@@ -41,6 +45,18 @@ critics:
     url: https://x.com/pirania0630/
     name: pirania0630
     enabled: true
+    # ★ 本人が最も信用している情報源（2026-08-06 指定）
+    #
+    # trust: primary が変えるのは **可視性** であって的中率ではない:
+    #   - 取得件数を増やす（max_posts × trust_fetch_multiplier）
+    #   - レポートで必ず先頭に置く
+    #   - 静穏週でも折り畳まない（他の情報源は畳まれる）
+    #   - 未測定でも「参考見解」として本文に載せてよい（要・的中率の併記）
+    #
+    # 変えないもの: domain_weight。**信用の宣言で的中率を上書きしない。**
+    # 上書きすると、この人がどの分野で強くどこで弱いかが永久に分からなくなり、
+    # 「最も信用している」の根拠が本人の記憶だけになる。
+    trust: primary
     note: ""          # 得意分野は実測で決まる。ここに先入観を書かない
 
   - source_id: noirinvestor

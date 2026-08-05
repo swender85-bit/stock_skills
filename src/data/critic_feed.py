@@ -247,13 +247,22 @@ def fetch_all(
     """
     cfg = config or load_critics_config()
     meta = cfg.get("meta") or {}
-    days = days or int(meta.get("default_days") or 7)
+    base_days = days or int(meta.get("default_days") or 7)
     limit = int(meta.get("max_posts_per_fetch") or 20)
+    trust_days = int(meta.get("trust_default_days") or base_days)
+    trust_mult = int(meta.get("trust_fetch_multiplier") or 1)
 
     results: dict[str, dict] = {}
     for critic in enabled_critics(cfg):
+        # trust: primary は取りこぼしを減らす方向に倒す。
+        # **取得量を増やすだけで、的中率には一切触れない。**
+        primary = str(critic.get("trust") or "") == "primary"
         results[critic["source_id"]] = fetch_recent_posts(
-            critic["handle"], days=days, limit=limit, caller=caller)
+            critic["handle"],
+            days=(trust_days if (primary and days is None) else base_days),
+            limit=(limit * trust_mult if primary else limit),
+            caller=caller)
+        results[critic["source_id"]]["trust"] = critic.get("trust")
 
     ok = [k for k, v in results.items() if v["available"]]
     failed = [k for k, v in results.items() if not v["available"]]
@@ -271,12 +280,28 @@ def fetch_all(
     else:
         summary = f"{len(ok)}アカウントから {total_posts}件を取得しました。"
 
+    # 最重要情報源が落ちたときは、それを名指しする。
+    # 他が取れていても「今週は材料が揃った」と読ませない。
+    primary_ids = {c["source_id"] for c in enabled_critics(cfg)
+                   if str(c.get("trust") or "") == "primary"}
+    primary_failed = sorted(primary_ids & set(failed))
+    if primary_failed:
+        summary += (f" ⚠️ **最重要情報源 {', '.join(primary_failed)} が取得できていません。**"
+                    "他が取れていても、材料が揃った週ではありません。")
+
     return {
         "results": results,
         "available_sources": ok,
         "failed_sources": failed,
+        "primary_failed": primary_failed,
         "total_posts": total_posts,
-        "days": days,
+        "days": base_days,
         "summary": summary,
         "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+def trust_map(config: Optional[dict] = None) -> dict[str, str]:
+    """source_id → trust ティア。未指定は `standard`。"""
+    return {c["source_id"]: str(c.get("trust") or "standard")
+            for c in enabled_critics(config or load_critics_config())}

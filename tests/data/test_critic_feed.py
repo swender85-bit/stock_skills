@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -345,3 +346,130 @@ class TestExternalViews:
         views = build_external_views(base_dir=critics_dir)
         # 本人が開示原文を引用していても、又聞きは又聞き
         assert all(v["provenance"] == "external_discourse" for v in views["views"])
+
+
+# ---------------------------------------------------------------------------
+# 最重要情報源（trust: primary）— 2026-08-06
+# ---------------------------------------------------------------------------
+
+
+class TestPrimaryTrust:
+    """信用の宣言は**可視性**を変える。**的中率は変えない。**
+
+    上書きしてしまうと、その人がどの分野で強くどこで弱いかが永久に分からなくなり、
+    「最も信用している」の根拠が本人の記憶だけになる。測る意味が消える。
+    """
+
+    def test_pirania_is_the_primary_source(self):
+        from src.data.critic_feed import trust_map
+
+        tiers = trust_map()
+        assert tiers["pirania0630"] == "primary"
+        assert all(v == "standard" for k, v in tiers.items() if k != "pirania0630")
+
+    def test_primary_is_fetched_wider_and_deeper(self, monkeypatch):
+        monkeypatch.setenv("XAI_API_KEY", "test-key")
+        seen: list[dict] = []
+
+        def caller(prompt, **_kw):
+            seen.append({"prompt": prompt})
+            return "[]"
+
+        from src.data.critic_feed import fetch_all
+
+        fetch_all(caller=caller)
+        primary = [s for s in seen if "@pirania0630" in s["prompt"]][0]
+        other = [s for s in seen if "@noatake1127" in s["prompt"]][0]
+        # 取りこぼしを減らす方向にだけ倒す
+        assert "last 14 days" in primary["prompt"]
+        assert "last 7 days" in other["prompt"]
+        assert "at most 40 posts" in primary["prompt"]
+        assert "at most 20 posts" in other["prompt"]
+
+    def test_primary_failure_is_called_out_by_name(self, monkeypatch):
+        monkeypatch.setenv("XAI_API_KEY", "test-key")
+
+        def caller(prompt, **_kw):
+            return "" if "@pirania0630" in prompt else "[]"
+
+        from src.data.critic_feed import fetch_all
+
+        result = fetch_all(caller=caller)
+        assert result["primary_failed"] == ["pirania0630"]
+        # 他が取れていても「材料が揃った週」と読ませない
+        assert "最重要情報源" in result["summary"]
+        assert "材料が揃った週ではありません" in result["summary"]
+
+    def test_primary_view_is_citable_as_reference_while_unmeasured(self, critics_dir):
+        from src.core.critic_calibration import citation_style
+
+        standard = citation_style("noatake1127", "macro", critics_dir, trust="standard")
+        primary = citation_style("pirania0630", "macro", critics_dir, trust="primary")
+
+        # どちらも「根拠」にはならない
+        assert standard["usable_as_evidence"] is False
+        assert primary["usable_as_evidence"] is False
+        # だが最重要情報源は参考見解として本文に載せてよい
+        assert standard["usable_as_reference"] is False
+        assert primary["usable_as_reference"] is True
+        assert primary["style"] == "trusted_unverified"
+        assert "未測定" in primary["prefix"]
+        assert "判断を成立させない" in primary["note"]
+
+    def test_declared_trust_never_overrides_measured_weight(self, critics_dir):
+        from src.core.critic_calibration import (
+            build_thesis,
+            citation_style,
+            domain_weight,
+            save_critic,
+        )
+
+        # 実測で 0.6 を割っている分野（価格水準の断言 0勝5敗）
+        save_critic({"source_id": "pirania0630", "name": "pirania0630", "theses": [
+            build_thesis(f"主張{i}", "price_level", at="2026-07-01",
+                         score="refuted", verified_on="2026-07-15")
+            for i in range(5)
+        ]}, critics_dir)
+        w = domain_weight("pirania0630", "price_level", critics_dir)
+        style = citation_style("pirania0630", "price_level", critics_dir, trust="primary")
+
+        assert w["weight"] == 0.0
+        # 信用の宣言で実測を覆さない
+        assert style["usable_as_evidence"] is False
+        assert style["style"] == "quotation"
+        assert "実測は 0.6 を下回っている" in style["note"]
+
+    def test_primary_views_come_first(self, critics_dir, monkeypatch):
+        from src.core import critic_calibration as CC
+
+        monkeypatch.setattr(
+            "src.data.critic_feed.trust_map",
+            lambda *a, **k: {"pirania0630": "primary", "noatake1127": "standard"})
+        today = date.today().isoformat()
+        ingest_posts("noatake1127", [{"posted_at": today, "text": "需給の話",
+                                      "symbols": []}], base_dir=critics_dir)
+        ingest_posts("pirania0630", [{"posted_at": today, "text": "金利の話",
+                                      "symbols": []}], base_dir=critics_dir)
+
+        views = CC.build_external_views(base_dir=critics_dir)
+        assert views["views"][0]["source_id"] == "pirania0630"
+        assert views["primary_sources"] == ["pirania0630"]
+
+    def test_absent_primary_is_flagged_not_treated_as_silence(self, critics_dir, monkeypatch):
+        from src.core import critic_calibration as CC
+
+        monkeypatch.setattr(
+            "src.data.critic_feed.trust_map",
+            lambda *a, **k: {"pirania0630": "primary", "noatake1127": "standard"})
+        ingest_posts("noatake1127", [{"posted_at": date.today().isoformat(),
+                                      "text": "需給の話", "symbols": []}],
+                     base_dir=critics_dir)
+        # pirania の台帳ファイルだけ作って中身を空にする
+        ingest_posts("pirania0630", [], base_dir=critics_dir)
+        (Path(critics_dir) / "pirania0630.json").write_text(
+            json.dumps({"source_id": "pirania0630", "theses": []}, ensure_ascii=False),
+            encoding="utf-8")
+
+        views = CC.build_external_views(base_dir=critics_dir)
+        assert views["missing_primary"] == ["pirania0630"]
+        assert "台帳にありません" in views["note"]

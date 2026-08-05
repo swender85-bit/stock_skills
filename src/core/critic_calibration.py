@@ -247,21 +247,45 @@ def profile(source_id: str, base_dir: str = _CRITICS_DIR) -> dict:
     }
 
 
-def citation_style(source_id: str, domain: str, base_dir: str = _CRITICS_DIR) -> dict:
+def citation_style(source_id: str, domain: str, base_dir: str = _CRITICS_DIR,
+                   trust: str = "standard") -> dict:
     """この主張をレポートでどう書くべきか (`.claude/rules/provenance.md` の規約).
 
     > 外部言説をレポート本文の根拠に使えるのは、その情報源のそのドメインの重みが
     > 0.6 以上のときのみ。それ未満は「◯◯氏の見解（当該ドメインでの過去的中率: n/m）」
     > として引用形式で書く。
+
+    `trust="primary"`（本人が最も信用している情報源）だけは、未測定でも
+    **参考見解として本文に載せてよい**。ただし:
+
+    - 的中率の実測値（または「未測定」）を**必ず併記する**
+    - **単独で判断を成立させない**（他の根拠が要る）
+    - `domain_weight` は一切変えない。**信用の宣言で的中率を上書きしない。**
+
+    上書きしてしまうと、その人がどの分野で強くどこで弱いかが永久に分からなくなり、
+    「最も信用している」の根拠が本人の記憶だけになる。測る意味が消える。
     """
     w = domain_weight(source_id, domain, base_dir)
     critic = load_critic(source_id, base_dir)
     label = critic.get("name") or source_id
+    primary = str(trust) == "primary"
 
     if not w["available"]:
+        if primary:
+            return {
+                "style": "trusted_unverified",
+                "usable_as_evidence": False,
+                "usable_as_reference": True,
+                "prefix": (f"★{label}（本人が最も信用している情報源／"
+                           f"当該分野の的中率は未測定・採点済み {w['samples']}件）"),
+                "note": ("参考見解として本文に載せてよい。ただし的中率が未測定である旨を"
+                         "必ず添え、**この見解だけで判断を成立させない**。"),
+                "weight": None,
+            }
         return {
             "style": "unverified",
             "usable_as_evidence": False,
+            "usable_as_reference": False,
             "prefix": f"{label}の見解（当該ドメインでの的中率は未測定・採点済み {w['samples']}件）",
             "note": "未検証の主張として明示する。的中率が低いという意味ではない。",
             "weight": None,
@@ -270,16 +294,24 @@ def citation_style(source_id: str, domain: str, base_dir: str = _CRITICS_DIR) ->
         return {
             "style": "evidence",
             "usable_as_evidence": True,
-            "prefix": f"{label}（{DOMAINS.get(domain, domain)}の的中率 {w['weight']:.2f}）",
+            "usable_as_reference": True,
+            "prefix": (("★" if primary else "")
+                       + f"{label}（{DOMAINS.get(domain, domain)}の的中率 {w['weight']:.2f}）"),
             "note": "本文の根拠に使ってよい。",
             "weight": w["weight"],
         }
+    # 実測で 0.6 を割った分野は、最重要情報源でも根拠にしない。
+    # ここを信用の宣言で覆すと、**実測が判断に影響しない**＝測る意味が消える。
     return {
         "style": "quotation",
         "usable_as_evidence": False,
-        "prefix": (f"{label}の見解（{DOMAINS.get(domain, domain)}での過去的中率 "
-                   f"{w['weight']:.2f} / {w['samples']}件）"),
-        "note": "本文の根拠にはせず、引用形式で書く。",
+        "usable_as_reference": bool(primary),
+        "prefix": (("★" if primary else "")
+                   + f"{label}の見解（{DOMAINS.get(domain, domain)}での過去的中率 "
+                     f"{w['weight']:.2f} / {w['samples']}件）"),
+        "note": ("本文の根拠にはせず、引用形式で書く。"
+                 + ("最も信用している情報源だが、**この分野の実測は 0.6 を下回っている**。"
+                    if primary else "")),
         "weight": w["weight"],
     }
 
@@ -602,17 +634,30 @@ def build_external_views(
                      "`python scripts/fetch_critics.py --apply` で取り込めます。"),
         }
 
+    try:
+        from src.data.critic_feed import trust_map
+
+        trust = trust_map()
+    except Exception:
+        trust = {}
+
     views: list[dict] = []
     for source_id in sources:
         critic = load_critic(source_id, base_dir)
+        tier = trust.get(source_id, "standard")
+        primary = tier == "primary"
         recent = [t for t in critic.get("theses") or []
                   if str(t.get("date") or "") >= cutoff]
         recent.sort(key=lambda t: str(t.get("date") or ""), reverse=True)
-        for thesis in recent[:limit_per_source]:
-            citation = citation_style(source_id, thesis.get("domain", ""), base_dir)
+        # 最重要情報源は多めに載せる（可視性のみ。的中率は変えない）
+        take = limit_per_source * 2 if primary else limit_per_source
+        for thesis in recent[:take]:
+            citation = citation_style(source_id, thesis.get("domain", ""), base_dir, tier)
             views.append({
                 "source_id": source_id,
                 "name": critic.get("name") or source_id,
+                "trust": tier,
+                "primary": primary,
                 "date": thesis.get("date"),
                 "domain": thesis.get("domain"),
                 "domain_label": DOMAINS.get(thesis.get("domain", ""), thesis.get("domain")),
@@ -622,9 +667,14 @@ def build_external_views(
                 "provenance": "external_discourse",
                 "citation": citation,
                 "usable_as_evidence": citation["usable_as_evidence"],
+                "usable_as_reference": citation.get("usable_as_reference", False),
                 "verifiable": bool(thesis.get("verifiable")),
                 "score": thesis.get("score"),
             })
+
+    # 最重要情報源を先頭に。静穏週でも畳まれないようにするための並び。
+    views.sort(key=lambda v: (not v["primary"], str(v.get("date") or "")), reverse=False)
+    views.sort(key=lambda v: (not v["primary"], ), reverse=False)
 
     by_symbol: dict[str, list[dict]] = {}
     for view in views:
@@ -638,6 +688,24 @@ def build_external_views(
                    and not v["symbols"]]
 
     usable = sum(1 for v in views if v["usable_as_evidence"])
+    primary_views = [v for v in views if v["primary"]]
+    primary_sources = sorted({s for s in sources if trust.get(s) == "primary"})
+    missing_primary = [s for s in primary_sources
+                       if not any(v["source_id"] == s for v in views)]
+
+    note = f"直近{days}日で {len(sources)}情報源から {len(views)}件。"
+    if usable:
+        note += f"うち {usable}件は本文の根拠に使えます。"
+    else:
+        note += ("**本文の根拠に使えるものはありません（全て未測定または重み不足）。**"
+                 "引用形式で書き、これを根拠に判断を組み立てないこと。")
+    if primary_sources:
+        note += (f" 最重要情報源: {', '.join(primary_sources)}"
+                 f"（{len(primary_views)}件・必ず先頭に置き、静穏週でも畳まない）。")
+    if missing_primary:
+        note += (f" ⚠️ **{', '.join(missing_primary)} の直近発言が台帳にありません。**"
+                 "『発言が無かった』か『取得できていない』かを取得ログで確認すること。")
+
     return {
         "available": True,
         "sources": sources,
@@ -645,13 +713,11 @@ def build_external_views(
         "by_symbol": by_symbol,
         "macro_views": macro_views,
         "usable_count": usable,
+        "primary_sources": primary_sources,
+        "primary_views": primary_views,
+        "missing_primary": missing_primary,
         "days": days,
-        "note": (
-            f"直近{days}日で {len(sources)}情報源から {len(views)}件。"
-            + (f"うち {usable}件は本文の根拠に使えます。" if usable else
-               "**本文の根拠に使えるものはありません（全て未測定または重み不足）。**"
-               "引用形式で書き、これを根拠に判断を組み立てないこと。")
-        ),
+        "note": note,
     }
 
 
