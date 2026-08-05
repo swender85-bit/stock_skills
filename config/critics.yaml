@@ -1,0 +1,72 @@
+# 参照する外部批評家（X / Twitter）— 改善5 の入力
+#
+# ⚠️ ここに載っているのは「信用している人」であって「正しい人」ではありません。
+#    このファイルの役割は、**その人が過去どれだけ当たったかを測り始めること**です。
+#    測る前は誰の発言も「未測定の外部言説」として扱われ、レポート本文の根拠には
+#    なりません（`.claude/rules/provenance.md` の規約）。
+#
+# ■ 得意分野を先に決めていない理由
+#
+#    5人とも話している内容が違い、しかも一人の中でも分野によって的中率が違います
+#    （需給には強いが価格水準の断言は外す、等）。だから **分野は発言ごとに分類し、
+#    重みは分野ごとに実測** します。ここに「この人は需給の人」と書いてしまうと、
+#    実測がその先入観に上書きされます。
+#
+# ■ 取得
+#
+#    python scripts/fetch_critics.py --days 7            # プレビュー
+#    python scripts/fetch_critics.py --days 7 --apply    # 台帳に追記
+#
+#    XAI_API_KEY が要ります。未設定なら取得せず、**「発言なし」ではなく
+#    「取得できなかった」**と報告されます。
+#
+# ■ 採点
+#
+#    python scripts/score_critics.py --apply
+#
+#    価格ターゲット・方向の言明のうち、期限が来たものを実測で自動採点します。
+#    定性的な主張は自動採点できないので pending のまま残り、手で採点します。
+
+meta:
+  # 1回の取得で1アカウントあたり取りにいく最大件数
+  max_posts_per_fetch: 20
+  # 既定の遡り日数
+  default_days: 7
+  # 方向の言明を検証するまでの既定期間（日）。明示が無いときに使う
+  default_horizon_days: 30
+
+critics:
+  - source_id: pirania0630
+    handle: pirania0630
+    url: https://x.com/pirania0630/
+    name: pirania0630
+    enabled: true
+    note: ""          # 得意分野は実測で決まる。ここに先入観を書かない
+
+  - source_id: noirinvestor
+    handle: noirinvestor
+    url: https://x.com/noirinvestor
+    name: noirinvestor
+    enabled: true
+    note: ""
+
+  - source_id: kokko_coco
+    handle: kokko_coco
+    url: https://x.com/kokko_coco
+    name: kokko_coco
+    enabled: true
+    note: ""
+
+  - source_id: imuvill
+    handle: imuvill
+    url: https://x.com/imuvill
+    name: imuvill
+    enabled: true
+    note: ""
+
+  - source_id: noatake1127
+    handle: noatake1127
+    url: https://x.com/noatake1127
+    name: noatake1127
+    enabled: true
+    note: ""

@@ -990,6 +990,15 @@ Graph-state analysis and skill recommendation (KIK-411/414).
 TEI vector search and result merging for hybrid context retrieval (KIK-420).
 
 
+### src.data.critic_feed
+
+X�ｼ�Twitter�ｼ峨°繧画音隧募ｮｶ縺ｮ逋ｺ險繧貞叙蠕励☆繧� -- 謾ｹ蝟�5 縺ｮ蜈･蜉帷ｵ瑚ｷｯ.
+
+- `load_critics_config(path: Optional[str]=None) -> dict` — `config/critics.yaml` 繧定ｪｭ繧縲ら┌縺代ｌ縺ｰ遨ｺ�ｼ茨ｼ晏叙蠕怜ｯｾ雎｡縺ｪ縺暦ｼ峨�
+- `enabled_critics(config: Optional[dict]=None) -> list[dict]`
+- `fetch_recent_posts(handle: str, days: int=7, limit: int=20, timeout: int=45, caller: Any=None) -> dict` — 1繧｢繧ｫ繧ｦ繝ｳ繝医�ｮ逶ｴ霑醍匱險繧貞叙繧九�
+- `fetch_all(days: Optional[int]=None, config: Optional[dict]=None, caller: Any=None) -> dict` — 逋ｻ骭ｲ貂医∩繧｢繧ｫ繧ｦ繝ｳ繝医ｒ蜈ｨ驛ｨ蜿悶ｋ縲�
+
 ### src.data.embedding_client
 
 TEI (Text Embeddings Inference) REST API client (KIK-420).

@@ -593,6 +593,24 @@ def _safe_constraints(config: dict, base: dict, holdings: list[dict],
 # ---------------------------------------------------------------------------
 
 
+def _safe_external_views(holdings: list[dict]) -> dict:
+    """外部批評家の直近見解（改善5）。台帳を読むだけで API は叩かない。
+
+    取れなかった場合に「誰も何も言っていない」と読ませないよう、
+    `available` と `note` で状態を明示する。
+    """
+    try:
+        from src.core.critic_calibration import build_external_views
+
+        symbols = [h.get("symbol") for h in holdings or [] if h.get("symbol")]
+        return build_external_views(days=7, symbols=symbols)
+    except Exception as e:
+        return {"available": False, "views": [], "by_symbol": {}, "macro_views": [],
+                "usable_count": 0, "sources": [],
+                "note": f"外部言説を読めませんでした（{type(e).__name__}）。"
+                        "『発言が無かった』ではありません。"}
+
+
 def _safe_falsification(holdings: list[dict]) -> dict:
     """反証条件の点検。**価格ではなく信念の変化**を最初に見るための材料。"""
     try:
@@ -716,6 +734,11 @@ def build_portfolio_briefing(
     with _timed("constraints"):
         constraints = _safe_constraints(config, base, holdings, reconciliation)
 
+    # 外部言説（改善5）。**API は叩かず台帳を読むだけ**なのでコストは0。
+    # 重みが未測定・不足のものは本文の根拠に使えない印が付いて渡る。
+    with _timed("external_views"):
+        external_views = _safe_external_views(holdings)
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     with _timed("falsification"):
@@ -774,6 +797,9 @@ def build_portfolio_briefing(
         "falsification": falsification,
         "forward": forward,
         "constraints": constraints,
+        # 外部批評家の直近見解（改善5）。各見解に citation が付いており、
+        # 重み未測定・不足のものは本文の根拠に使ってはならない。
+        "external_views": external_views,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),

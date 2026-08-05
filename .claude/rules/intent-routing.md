@@ -456,6 +456,26 @@ python .claude/skills/stock-portfolio/scripts/run_portfolio.py reconcile
 **判定キーワード**: 「レポートの質」「プロンプト」「synthesis」「評価軸」「eval」
 「モデル配分」「どのモデル」「カオス」「壊して」「縮退」「気づける」
 
+### 外部批評家ドメイン → fetch_critics / score_critics（改善5）
+
+X で参照している5アカウントの発言を取り込み、**当たったかどうかを分野別に実測**する。
+
+```
+「Xの人たちの発言取り込んで」「批評家更新して」        → python scripts/fetch_critics.py --apply
+「◯◯さん何て言ってる？」                          → python scripts/fetch_critics.py --source <id> --apply
+「あの人当たってる？」「的中率は？」「誰が信用できる？」 → python scripts/score_critics.py --apply
+「手で採点するのある？」                           → python scripts/score_critics.py --show-manual
+```
+
+**回答時の絶対ルール**:
+- 重みが `usable` でない情報源の見解を**判断の根拠にしない**。
+  「◯◯氏の見解（当該分野の的中率 未測定）」と引用形式で書く
+- 取得に失敗した週を「発言が無かった」と書かない
+- 「この人は◯◯が得意」と決め打ちしない。**分野別の実測値だけを言う**
+
+**判定キーワード**: 「批評家」「Xの人」「あの人」「的中率」「当たってる」
+「信用できる」「pirania」「noir」「kokko」「imuvill」「noatake」
+
 ⚠️ `eval_synthesis.py` は `--dry-run` でない限り `claude -p` を呼ぶ（課金される）。
 節数 × モデル数 × fixture数 だけ呼ぶので、**実行前に呼び出し回数を伝えること**。
 

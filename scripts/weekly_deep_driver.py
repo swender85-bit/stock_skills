@@ -155,10 +155,15 @@ def slice_pack(pack: dict, section: dict) -> dict:
                                       for h in pack.get("holdings") or []]}
 
     if kind == "forward":
+        ext = pack.get("external_views") or {}
         return {**meta,
                 "forward": pack.get("forward"),
                 "moomoo": pack.get("moomoo"),
                 "indices": pack.get("indices"),
+                # マクロ系の外部見解だけ渡す（改善5）。銘柄別は holding 節へ。
+                "external_views": {"available": ext.get("available"),
+                                   "note": ext.get("note"),
+                                   "views": ext.get("macro_views") or []},
                 "holdings_overview": [_slim_holding(h)
                                       for h in pack.get("holdings") or []]}
 
@@ -225,6 +230,13 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 # 物語混雑度（提案7）— 「上がっているが持つ理由がない」の判定材料
                 "crowding": ((pack.get("narrative") or {}).get("crowding") or {}).get(
                     sym or f"name:{rows[0].get('name') if rows else ''}"),
+                # この銘柄に言及した外部見解（改善5）。citation に従って書く。
+                "external_views": {
+                    "available": (pack.get("external_views") or {}).get("available"),
+                    "note": (pack.get("external_views") or {}).get("note"),
+                    "views": ((pack.get("external_views") or {}).get("by_symbol")
+                              or {}).get(sym) or [],
+                },
                 "prior_context": pack.get("prior_context")}
 
     if kind == "heat":
@@ -742,6 +754,26 @@ def body_for_prompt(state: dict, out_dir: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+def refresh_critics(days: int = 7) -> None:
+    """外部批評家の直近発言を取り込む（改善5）。
+
+    パック生成の**前**に走らせる。パック側は台帳を読むだけなので、
+    ここで取れなければ「今週の見解なし」ではなく「取得できなかった」として
+    レポートに出る。失敗しても週次は止めない（全体が opt-in の材料）。
+    """
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "fetch_critics.py"),
+             "--days", str(days), "--apply"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            cwd=str(REPO), timeout=600)
+        tail = [l for l in (proc.stdout or "").splitlines() if l.strip()][-3:]
+        for line in tail:
+            log(f"critics: {line}")
+    except Exception as exc:
+        log(f"critics: 取り込みをスキップしました（{type(exc).__name__}）")
+
+
 def ensure_pack(pack_arg: Optional[str], out_dir: Path, no_moomoo: bool) -> Optional[Path]:
     if pack_arg:
         p = Path(pack_arg)
@@ -775,6 +807,10 @@ def main() -> int:
                     help="未完了の途中状態がある時だけ動く（再開タスク用。無ければ何もせず終了）")
     ap.add_argument("--dry-run", action="store_true", help="vault 同期せず output/ のみ")
     ap.add_argument("--no-moomoo", action="store_true")
+    ap.add_argument("--no-critics", action="store_true",
+                    help="外部批評家(X)の取り込みをスキップする")
+    ap.add_argument("--critic-days", type=int, default=7,
+                    help="批評家の発言を何日分取り込むか")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -808,6 +844,8 @@ def main() -> int:
         return EXIT_OK
 
     if not state:
+        if not args.no_critics:
+            refresh_critics(args.critic_days)
         pack_path = ensure_pack(args.pack, out_dir, args.no_moomoo)
         if not pack_path or not pack_path.exists():
             log("❌ パックを用意できませんでした")
