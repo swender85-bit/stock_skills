@@ -139,7 +139,19 @@ def fetch_recent_posts(
         return out
 
     if not raw or not str(raw).strip():
-        out["error"] = "Grok から空の応答が返りました（取得できませんでした）。"
+        # サーバが理由を返しているなら、それをそのまま見せる。
+        # 「空の応答」だけだと、クレジット切れ（待っても直らない）と
+        # 一時的な失敗（待てば直る）が同じ文面になり、対処を誤らせる。
+        status = _common.get_error_status() or {}
+        reason = status.get("message") or ""
+        if status.get("status") == "no_credits":
+            out["error"] = (f"Grok API に拒否されました（{reason}）。"
+                            "console.x.ai でクレジットを購入してください。"
+                            "**待っても直りません。**")
+        elif reason:
+            out["error"] = f"Grok から取得できませんでした（{reason}）。"
+        else:
+            out["error"] = "Grok から空の応答が返りました（取得できませんでした）。"
         return out
 
     parsed = _parse_posts(raw)
