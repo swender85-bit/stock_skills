@@ -18,6 +18,59 @@
 `state_YYYYMMDD.json` に記録するので、使用量上限に当たっても中断（exit 2）で済み、
 次の起動が**続きから**再開する。人の操作は要らない。
 
+## 層2 の品質を測る（改善1: synthesis eval harness）
+
+Python層はテスト4,600件が縛っているが、**Claude が書く文章はこれまで誰も測って
+いなかった**。プロンプトを触っても節の質が落ちたことに気づく手段が無い。
+
+```bash
+python scripts/eval_synthesis.py --section 1 --fixture pack_circular  # 1節×1fixture
+python scripts/eval_synthesis.py --changed        # プロンプト編集後の煙試験（節1・節6）
+python scripts/eval_synthesis.py --all            # 全節×全fixture（週1回・重い）
+python scripts/eval_synthesis.py --all --dry-run  # API を叩かず配線だけ確認
+```
+
+`tests/synthesis/assertions.py` が §16 の8原則を文章レベルで縛る:
+
+| 検査 | 縛る性質 |
+|:---|:---|
+| `no_unavailable_as_zero` | §16-1 取得失敗を「0件」「問題なし」と書かない |
+| `circular_disclosed` | §16-3 循環照合を「一致」と呼ばない |
+| `no_buy_recommendation` | §16-5 条件節を伴わない買い推奨を出さない |
+| `quiet_week_length` | §7.4 静穏週は30行以内 |
+| `orphan_flagged` | §17.2 孤児ポジションを名指しする |
+| `section_order` | §7.1 固定骨格（機会が照合・制約より前に出ない） |
+| `growth_window_labeled` | §16-2 四半期YoYのスパイクに年度基準を併記 |
+| `cache_age_disclosed` | §12.2 退避キャッシュの鮮度を伏せない |
+
+- `skip` を `pass` と混ぜない（判定していないものを通過に数えると通過率が嘘になる）。
+- `pytest tests/synthesis -q` は **API を叩かない**。縛っているのは
+  「検査が既知の悪い文章を落とし、既知の良い文章を通すか」という**評価軸の回帰**。
+- `.claude/prompts/*.md` を編集すると PostToolUse hook が無料の回帰を回し、
+  有料 eval を予約する（`SYNTHESIS_EVAL_ON_EDIT=async` で実際に起動）。
+
+## 節ごとのモデル配分（改善2: rightmodel）
+
+`config/synthesis_models.yaml` で節ごとにモデルを指定できる。
+
+```bash
+python scripts/eval_synthesis.py --sweep --models haiku,sonnet,opus \
+    --sections 0,1,2,3,4 --fixtures pack_quiet_week,pack_circular
+```
+
+**選定規約:**
+
+1. **通過率が同じなら安い方を選ぶ。**
+2. ただし **節1（照合）と節6（事前決定）は通過率100%を必須**とする。
+   節1が通らないと以降の全数値が条件付きになり、節6は土曜の唯一の成果物で
+   誤りが直接ポジションに効く。
+3. `measured_as_of` が空のあいだ、`critical_sections` は既定モデルから**下げない**
+   （`resolve_section_model()` が強制する）。実測なしにモデルを落とすと、
+   どの節が劣化したのか分からないまま品質が下がる。
+4. 判定できた検査が0件のセルからは推奨を出さない。**実行不能は合格ではない。**
+
+スイープは API コストがかかる。まず節0〜4だけ・fixture 2種から。
+
 ## 固定骨格（土曜設計書 第3章）
 
 **節の順序は意思決定論的に固定されており、変更しない。**

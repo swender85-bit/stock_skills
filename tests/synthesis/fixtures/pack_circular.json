@@ -1,0 +1,90 @@
+{
+  "pack_version": 2,
+  "mode": "portfolio",
+  "_fixture_note": "循環照合。楽天CSVが模型の生成元と同一のため独立検証が成立していない。「一致」と書いたら FAIL。",
+  "meta": {
+    "as_of": "2026-08-01",
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "holdings_source": "rakuten_csv",
+    "holdings_import": {"type": "assetbalance", "exported_at": "2026-07-30", "file": "assetbalance(all)_20260730.csv"},
+    "fx_rate": 161.4,
+    "warnings": ["照合に使ったCSVは模型の生成元と同一です。独立検証にはなっていません。"]
+  },
+  "information": {
+    "verdict": "要対応週",
+    "quiet": false,
+    "actionable": [
+      {"priority": 3, "kind": "reconciliation", "title": "残高の独立検証ができていません", "detail": "模型の生成元と同じデータで照合しています。新しいCSVは取り込む前に reconcile すると独立検証になります。"}
+    ],
+    "actionable_count": 1,
+    "changed_count": 1,
+    "checked_count": 30,
+    "folded_count": 3,
+    "guidance": "次回は取り込み前に reconcile を実行してください。"
+  },
+  "reconciliation": {
+    "as_of": "2026-08-01",
+    "status": "circular",
+    "blocking": false,
+    "reconcilable": true,
+    "independently_verified": false,
+    "model_source": "rakuten_csv(2026-07-30) — 照合対象CSVと同一ファイル",
+    "counts": {"model": 3, "broker": 3, "matched": 3, "diffs": 0, "ghosts": 0, "unrecorded": 0, "unverified": 0, "orphans": 0},
+    "diffs": [],
+    "unknown_diffs": [],
+    "ghosts": [],
+    "unrecorded": [],
+    "unverified": [],
+    "corporate_actions": [],
+    "orphans": [],
+    "orphan_burden_pct": 0.0,
+    "messages": [
+      "模型の生成元と同じデータで照合しています。差分が0なのは当然であり、一致の証拠ではありません。",
+      "楽天証券から新しいCSVを保存すると独立照合になります。"
+    ]
+  },
+  "falsification": {"falsified": [], "near": [], "unchecked": [], "missing": [], "intact": 3, "checked": 3, "total": 3, "note": "反証条件に抵触した保有はありません。"},
+  "forward": {
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "errors": [],
+    "calendar": {"range": "2026-08-03/2026-08-09", "as_of": "2026-08-01", "events": [], "folded": [], "unavailable_symbols": [], "note": "翌週に確定イベントはありません。"},
+    "concentration": {"available": true, "pct": 0.0, "level": "ok"},
+    "policy_gaps": {"gaps": [], "covered": [], "message": "翌週決算を迎える銘柄はありません。"},
+    "dividend_drops": [],
+    "monday_outlook": {"available": true, "note": "先物は小動き。"},
+    "schedule_changes": [],
+    "triggers": {"available": true, "approaching": [], "met": [], "checked": 4, "message": "トリガー接近・成立はありません。"},
+    "actionable": []
+  },
+  "constraints": {
+    "tax_state": {"realized_pl_jpy": null, "recorded": false, "nisa_used_estimate": {"value": 600000, "reliable": false}, "warnings": []},
+    "runway_bundle": {"cash_jpy": 10100, "weekly_investable_jpy": 12500, "purpose_assigned": false},
+    "attention": {"holdings": 3, "orphans": 0, "minutes_per_holding": 20, "effective_watch": 3},
+    "loss_harvest": {"available": true, "candidates": []},
+    "liquidity": {"errors": [], "liquidity": {"profiles": [], "trapped": []}},
+    "errors": []
+  },
+  "execution_audit": {"window_days": 90, "executions_available": true, "survival": {"available": true, "total": 8, "executed": 6, "unexecuted": 2, "rate": 0.75}, "shortfall": {"available": true, "bps": -5.0}, "performance": {"available": true}, "reasons": [], "errors": []},
+  "model_audit": {"errors": [], "score": {"available": true, "weeks": 26, "min_weeks": 26, "bias": null}, "missing_factor": []},
+  "week_diff": {"changed": ["SOXL"], "folded": ["2802.T", "QCOM"]},
+  "cumulative_diff": {"available": true, "weeks_4": {"value_change_pct": -1.2}, "weeks_13": {"value_change_pct": 4.0}},
+  "narrative": {"crowding": {}},
+  "portfolio": {"total_jpy": 18700000, "cash_jpy": 10100, "total_pl_jpy": 7400000, "pl_pct": 65.6},
+  "holdings": [
+    {"name": "味の素", "symbol": "2802.T", "account": "特定", "shares": 400, "cost_price": 3906.03, "price": 5102, "price_source": "yfinance", "currency": "JPY", "value_jpy": 2040800, "pl_jpy": 478385, "pl_pct": 30.6, "weight_pct": 10.9, "week_change_pct": 0.2, "leverage": 1,
+     "fundamentals": {"per": 21.4, "pbr": 2.9, "roe": 0.14, "revenue_growth": 0.05, "earnings_growth": 0.08, "sector": "Consumer Defensive", "is_etf": false},
+     "technicals": {"last": 5102, "rsi14": 50.0, "percent_b": 0.45, "range_52w_position": 0.5, "sma200_deviation_pct": 0.4, "heat_state": "neutral"}}
+  ],
+  "indices": {},
+  "holding_news": {},
+  "market_news": [],
+  "moomoo": {},
+  "forward_schedule": [],
+  "schedule_status": {"2802.T": {"symbol": "2802.T", "name": "味の素", "fetched": true, "source": "yfinance", "status": "none_upcoming", "next_earnings": "2026-11-05", "label": "取得済み。翌週に予定はありません。"}},
+  "projection": {},
+  "scenarios": [],
+  "positions_assumptions": {},
+  "vol_calibration": {"available": true, "entries": []},
+  "monthly_contribution": 50000,
+  "prior_context": {"theses": [], "concerns": [], "lessons": []}
+}

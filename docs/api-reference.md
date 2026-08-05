@@ -1474,6 +1474,7 @@ Structure analysis and shareholder-return output formatters (KIK-447, split from
 - `format_runway(bundle: dict) -> str` — 迴ｾ驥代�ｻ騾ｱ谺｡謚戊ｳ�蜿ｯ閭ｽ鬘阪�ｻ繝ｩ繝ｳ繧ｦ繧ｧ繧､繝ｻ迴ｾ驥代�ｮ逶ｮ逧�縲�
 - `format_funding_options(result: dict, target_label: str='') -> str` — (a)螢ｲ蜊ｴ /(b)迴ｾ驥� /(c)蜈･驥大ｾ�縺｡ /(d)隕乗ｨ｡邵ｮ蟆� 縺ｮ豈碑ｼ�縲�
 - `format_attention(budget: dict) -> str`
+- `format_assumption_conflicts(result: Optional[dict]) -> str` — 蜑肴署縺ｮ陦晉ｪ��ｼ域隼蝟�4�ｼ峨�
 - `format_constraints(bundle: dict) -> str` — 蛻ｶ邏�繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ蜈ｨ菴難ｼ育ｬｬ4繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ�ｼ峨ｒ縺ｾ縺ｨ繧√※蜃ｺ縺吶�
 
 ### src.output.forecast_formatter

@@ -41,12 +41,31 @@
 
 ## テスト
 
-- `python3 -m pytest tests/ -q` で全テスト実行（約4584テスト、~20秒）
+- `python3 -m pytest tests/ -q` で全テスト実行（約4703テスト、~20秒）
 - `tests/conftest.py` に共通フィクスチャ: `stock_info_data`, `stock_detail_data`, `price_history_df`, `mock_yahoo_client`
 - `tests/conftest.py` に autouse `_block_external_io` フィクスチャ: Neo4j/TEI/Grok を全テストで自動モック（KIK-529）。`@pytest.mark.no_auto_mock` でオプトアウト可
 - `tests/fixtures/` に JSON/CSV テストデータ（Toyota 7203.T ベース）
 - `mock_yahoo_client` は monkeypatch で yahoo_client モジュール関数をモック
 - テストファイルは `tests/core/`, `tests/data/`, `tests/output/` に機能別に配置
+
+### synthesis 層の評価軸 (改善1)
+
+- `tests/synthesis/` — **Claude が書く文章**の性質を縛る。`claude -p` は呼ばない
+  （CI が課金され、出力が毎回変わって回帰テストにならない）。縛っているのは
+  「検査が既知の悪い文章を落とし、既知の良い文章を通すか」＝**評価軸の回帰**
+- `assertions.py` は `pass` / `fail` / **`skip`** の3値を返す。
+  skip を pass と混ぜると通過率が嘘になる（§16-1 を harness 自身に適用）
+- 実出力の評価は `python scripts/eval_synthesis.py`（API を叩く・週1回）
+- `.claude/prompts/*.md` 編集時に PostToolUse hook が無料の回帰を回し、
+  有料 eval を予約する。`SYNTHESIS_EVAL_ON_EDIT=off|smoke|async` で制御
+
+### カオステスト (改善7)
+
+- `tests/chaos/` — **わざと壊して気づくか試す**。既定でスキップされ、
+  `python scripts/run_chaos.py`（月1回）か `RUN_CHAOS=1` で走る
+- ⚠️ `pytest_collection_modifyitems` はサブディレクトリの conftest でも
+  **収集済みの全アイテム**を受け取る。ディレクトリで絞らずにマーカーを付けると
+  **スイート全件が丸ごとスキップされ、しかも pytest は成功で終わる**（実装中に踏んだ）
 
 ## Git ワークフロー
 

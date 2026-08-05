@@ -441,6 +441,24 @@ python .claude/skills/stock-portfolio/scripts/run_portfolio.py reconcile
 - 株価取得不可・履歴なしでも動作（該当判断はスキップ）。`--dry-run` で書き込みなし確認、`--no-lessons` で自動記録抑制
 - **判定キーワード**: 「答え合わせ」「命中率」「当たってた」「成績」「過去のおすすめ」「どのpresetが当たる」「外しから学ぶ」
 
+### 自己検証ドメイン → eval / chaos（改善1・2・7）
+
+システム自身の出力品質と縮退耐性を測る。投資の話ではないので他ドメインと混ぜない。
+
+```
+「レポートの質は落ちてない？」「プロンプト直したけど大丈夫？」 → python scripts/eval_synthesis.py --changed
+「文章の評価を全部回して」「synthesis eval」               → python scripts/eval_synthesis.py --all
+「どのモデルが安く済む？」「モデル配分を実測して」            → python scripts/eval_synthesis.py --sweep --models haiku,sonnet,opus
+「壊れても気づける？」「カオステスト」「縮退テスト」          → python scripts/run_chaos.py
+「何を壊してるの？」                                  → python scripts/run_chaos.py --list
+```
+
+**判定キーワード**: 「レポートの質」「プロンプト」「synthesis」「評価軸」「eval」
+「モデル配分」「どのモデル」「カオス」「壊して」「縮退」「気づける」
+
+⚠️ `eval_synthesis.py` は `--dry-run` でない限り `claude -p` を呼ぶ（課金される）。
+節数 × モデル数 × fixture数 だけ呼ぶので、**実行前に呼び出し回数を伝えること**。
+
 ### プランモードドメイン → `/plan-execute` (KIK-600)
 
 「プランモードで」「プランで」「プラン立てて」等の発言があった場合、`/plan-execute` スキルを起動する。
@@ -464,6 +482,8 @@ python .claude/skills/stock-portfolio/scripts/run_portfolio.py reconcile
 「7203.Tの政策を決めたい」      → add（撤退条件＋失効期限は必須）
 「政策一覧」「方針リスト」      → list
 「もうこの政策は要らない」      → expire
+「政策をまとめて入れて」「孤児を埋めて」 → python scripts/seed_policies.py（--apply で登録）
+「なぜ持ってるか書いてない銘柄」  → reconcile → 孤児が出たら seed_policies.py を案内
 ```
 
 **必ず守ること:**

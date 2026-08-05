@@ -211,11 +211,18 @@ def classify_quantity_diff(
 
 
 def _load_intent(symbol: Optional[str], name: Optional[str]) -> dict:
-    """この銘柄に thesis / 政策 があるか。無ければ孤児候補。"""
+    """この銘柄に thesis / 政策 があるか。無ければ孤児候補。
+
+    ティッカーの無い投信（FANG+ 等）は `symbol` が None で来る。名前も候補に
+    入れないと、**投信は thesis を書いても政策を登録しても永久に孤児のまま**になり、
+    孤児率が構造的に下がらない。実際 FANG+ は評価額の 7% を占めている。
+    """
     theses: list[dict] = []
     policies: list[dict] = []
 
     candidates = [c for c in (symbol, normalize_symbol(symbol)) if c]
+    if not symbol and name:
+        candidates.append(str(name).strip())
     # `7203` 形式でメモが書かれている場合も拾う（表記揺れで孤児を誤検出しない）
     try:
         from src.data.note_manager import load_notes

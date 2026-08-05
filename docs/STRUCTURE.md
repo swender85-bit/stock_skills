@@ -847,6 +847,8 @@ scripts/run_weekly_deep.bat
 | `tests/skills/` | — | スキルスクリプト |
 | `tests/hooks/` | — | フック |
 | `tests/scripts/` | — | CLI |
+| `tests/synthesis/` | 36件 | **Claude が書く文章**の評価軸（改善1）。API は叩かない |
+| `tests/chaos/` | 23件 | **わざと壊して気づくか試す**（改善7）。既定でスキップ |
 
 ### 14.1 conftest の自動モック
 
@@ -875,6 +877,47 @@ scripts/run_weekly_deep.bat
 | `test_falsification_suggestions.py` | 提案を登録済み条件として扱わない |
 | `test_etf_lookthrough.py` | ETFの「決算が無い」と「取得失敗」を混同しない |
 | `test_import_scripts_encoding.py` | cp932 環境で `¥` を出して落ちない |
+| `test_policy_rate_gate.py` | 金利ゲートが**売却側を止めない**・取得失敗で止めない |
+| `test_conflicting_assumptions.py` | 前提の衝突を検出し、**同方向の二重ロングは誤検出しない** |
+| `test_critic_calibration.py` | 未検証を「外れ」と数えない・少数の的中で実力を判定しない |
+
+### 14.3 synthesis 層の評価軸（改善1）
+
+`tests/synthesis/assertions.py` が **§16 の8原則を文章のレベルで**縛る。
+Python 層のテストが4,584件あるのに対し、synthesis 層は0件だった。
+
+| 検査 | 原則 |
+|:---|:---|
+| `no_unavailable_as_zero` | §16-1 取得失敗を「0件」「問題なし」と書かない |
+| `circular_disclosed` | §16-3 循環照合を「一致」と呼ばない |
+| `no_buy_recommendation` | §16-5 条件節を伴わない買い推奨を出さない |
+| `quiet_week_length` | §7.4 静穏週は30行以内 |
+| `orphan_flagged` | §17.2 孤児ポジションを名指しする |
+| `section_order` | §7.1 固定骨格（機会が照合・制約より前に出ない） |
+| `growth_window_labeled` | §16-2 四半期YoYのスパイクに年度基準を併記 |
+| `cache_age_disclosed` | §12.2 退避キャッシュの鮮度を伏せない |
+
+`pass` / `fail` / **`skip`** の3値を返す。skip を pass と混ぜると通過率が嘘になる
+——これは §16-1 を harness 自身に適用したもの。
+
+実際の synthesis 出力の評価は `scripts/eval_synthesis.py`（API を叩く・週1回）。
+
+### 14.4 カオステスト（改善7）
+
+`scripts/run_chaos.py` で月1回。**わざと壊して、システムが気づくか試す。**
+
+| 壊し方 | 期待される検出 |
+|:---|:---|
+| 模型を3ヶ月前の版にする | 幽霊ポジションとして検出 |
+| 楽天CSVを模型の生成元と同一にする | `circular=true` +「独立検証ではない」 |
+| 楽天CSVを0件にする | 「保有なし」ではなく「取得できなかった」 |
+| moomoo を落とす | 退避キャッシュに切替 + `cached_age_hours` 明示 |
+| 全項目 `available=false` | 「問題なし」ではなく「判定不能」 |
+| 決算日を空リストにする | `no_earnings` / `unavailable` を区別 |
+| 同期後に vault から消す | `resync_missing()` が翌回に検出 |
+
+§16-8「単一の取得元に依存しない」は、8/2 に直した穴9件のうち6件が同じ形だった。
+再発したらここで捕まる。**ただし攻撃は7種類しかなく、通過は「穴が無い証拠」ではない。**
 
 ---
 
@@ -951,12 +994,25 @@ scripts/run_weekly_deep.bat
 
 ### 17.2 ユーザーの判断が要るもの
 
-- **孤児ポジション6件（評価額の79.1%）** — thesis も政策も無い。
-  損切りも利確も判断基準が無い状態
-- QCOM の撤退ライン $158 の反証条件登録
-- `config/tax.yaml` の `meta.verified_as_of`
-- `config/cashflow.yaml` の現金の目的・週次レビュー時間
-- 楽天の取引履歴CSV（1回落とせば決定生存率が測れる）
+**2026-08-05 更新** — 下の3件は解消済み（`scripts/seed_policies.py`）。
+
+| 項目 | 状態 |
+|:---|:---|
+| ~~孤児ポジション6件（評価額の79.1%）~~ | ✅ **0件**。政策15本を登録し、全保有に thesis か政策がある |
+| ~~QCOM の撤退ライン $158 の反証条件登録~~ | ✅ thesis に `price <= 158` を登録。$172.12（リスクライン・政策）と**別レイヤー**で併存 |
+| ~~`config/tax.yaml` の `meta.verified_as_of`~~ | ✅ 2026-08-05 に本人確認済み |
+| `config/cashflow.yaml` の現金の目的・週次レビュー時間 | 未設定 |
+| 楽天の取引履歴CSV（1回落とせば決定生存率が測れる） | 未取得 |
+| `config/synthesis_models.yaml` の実測（改善2） | `measured_as_of` 空。スイープ未実行 |
+| `data/critics/` の採点蓄積（改善5） | 台帳形式のみ。判定への使用は保留中 |
+
+**QCOM の $158 と $172.12 は「同じ銘柄に2つの真実」ではなく、二層である**（ユーザー判断）:
+$172.12 = リスクライン（弾再生順序の変更のみ・損切りはしない）、
+$158 = 反証条件（テーゼが間違っていた証拠・売却の引き金ではない）。
+
+**副作用**: 政策を登録したので `deviation.py`（逸脱監査）が鳴り始める。
+最初の数週間はノイズが多いはずで、閾値の調整期間が要る。
+「政策から逸脱した」の大半は、政策が現実に合っていないという意味でもある。
 
 ### 17.3 構造的な限界
 

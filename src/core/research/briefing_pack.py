@@ -517,7 +517,8 @@ def _safe_constraints(config: dict, base: dict, holdings: list[dict],
     設計書 第3章の順序: 制約 → 機会。逆にすると実行できない推奨を先に読ませる。
     """
     out: dict = {"tax_state": None, "runway_bundle": None, "attention": None,
-                 "loss_harvest": [], "liquidity": None, "errors": []}
+                 "loss_harvest": [], "liquidity": None, "assumption_space": None,
+                 "errors": []}
 
     total_jpy = base.get("total_jpy")
     cash_jpy = base.get("cash_jpy")
@@ -569,6 +570,20 @@ def _safe_constraints(config: dict, base: dict, holdings: list[dict],
         out["attention"] = attention_budget(len(holdings or []), orphans, cfg)
     except Exception as e:
         out["errors"].append(f"資金ランウェイ: {type(e).__name__}: {e}")
+
+    # 前提空間（改善4）— 資産空間の HHI では見えない2種類の穴を見る:
+    #   集中 … 複数銘柄が同一前提に依存している
+    #   衝突 … 同じ変数の同じ方向に「好機」と「危機」が同居し、
+    #          **計画の実行条件が揃った瞬間に原資が毀損する**
+    # 制約側に置くのは、これが行動可能な空間の話だから（機会より先に読ませる）。
+    try:
+        from src.core.risk.assumptions import analyze_assumption_space
+
+        out["assumption_space"] = analyze_assumption_space(
+            holdings=[{"symbol": h.get("symbol"), "value": h.get("value_jpy")}
+                      for h in holdings or []])
+    except Exception as e:
+        out["errors"].append(f"前提空間: {type(e).__name__}: {e}")
 
     return out
 

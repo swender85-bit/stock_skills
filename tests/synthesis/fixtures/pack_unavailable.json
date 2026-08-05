@@ -1,0 +1,134 @@
+{
+  "pack_version": 2,
+  "mode": "portfolio",
+  "_fixture_note": "取得失敗が多数。決定生存率・模型採点・トリガー・混雑度・日程・マクロが取れていない。「0件」「問題なし」と書いたら FAIL。マクロは退避キャッシュ由来なので鮮度の開示も要る。",
+  "meta": {
+    "as_of": "2026-08-01",
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "holdings_source": "weekly_holdings.yaml",
+    "holdings_import": {"type": "assetbalance", "exported_at": "2026-06-13", "file": "assetbalance(all)_20260613.csv"},
+    "fx_rate": 161.4,
+    "warnings": [
+      "保有の取り込みから49日経過しています。この間に売買していれば反映されていません。",
+      "moomoo(OpenD) が無効のため、マクロは退避キャッシュを使用しました。"
+    ]
+  },
+  "information": {
+    "verdict": "要対応週",
+    "quiet": false,
+    "actionable": [
+      {"priority": 2, "kind": "data", "title": "取引履歴が取得できていません", "detail": "決定生存率を計算できません。これは執行率0%ではなく測れていないという意味です。"}
+    ],
+    "actionable_count": 1,
+    "changed_count": 2,
+    "checked_count": 18,
+    "folded_count": 2,
+    "guidance": "取得できていない項目を『問題なし』と読まないでください。"
+  },
+  "reconciliation": {
+    "as_of": "2026-08-01",
+    "status": "unreconciled",
+    "blocking": true,
+    "reconcilable": false,
+    "independently_verified": false,
+    "model_source": "weekly_holdings.yaml(2026-06-13)",
+    "counts": {"model": 2, "broker": null, "matched": null, "diffs": null, "ghosts": null, "unrecorded": null, "unverified": 2, "orphans": 0},
+    "diffs": [],
+    "unknown_diffs": [],
+    "ghosts": [],
+    "unrecorded": [],
+    "unverified": [{"symbol": "2802.T", "reason": "口座データが無いため残高不明です。"}, {"symbol": "SOXL", "reason": "口座データが無いため残高不明です。"}],
+    "corporate_actions": [],
+    "orphans": [],
+    "orphan_burden_pct": 0.0,
+    "messages": ["口座データが無いため照合できませんでした。一致でも幽霊でもなく残高不明です。"]
+  },
+  "falsification": {
+    "falsified": [],
+    "near": [],
+    "unchecked": [
+      {"symbol": "2802.T", "condition": "operating_cf < 0", "reason": "営業CFが取得できませんでした。"},
+      {"symbol": "SOXL", "condition": "drawdown_pct <= -50", "reason": "高値データが取得できませんでした。"}
+    ],
+    "missing": [],
+    "intact": 0,
+    "checked": 0,
+    "total": 2,
+    "note": "反証条件を1件も点検できませんでした。これは問題なしではなく未点検です。"
+  },
+  "forward": {
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "errors": ["yfinance の決算日取得に失敗しました。"],
+    "calendar": {
+      "range": "2026-08-03/2026-08-09",
+      "as_of": "2026-08-01",
+      "events": [
+        {"kind": "fomc", "date": "2026-08-05", "day_label": "水 8/5", "title": "FOMC 政策金利発表", "top_range": "3.75-4.00", "top_prob": 0.79, "source": "moomoo(cached)", "cached_age_hours": 168.4},
+        {"kind": "economic", "date": "2026-08-07", "day_label": "金 8/7", "title": "米雇用統計", "country": "US", "importance": 3, "consensus": "+14.0万人", "previous": "+11.7万人", "source": "moomoo(cached)", "cached_age_hours": 168.4}
+      ],
+      "folded": [],
+      "unavailable_symbols": ["2802.T", "SOXL"],
+      "note": "銘柄の日程は取得できませんでした。予定なしではありません。"
+    },
+    "concentration": {"available": false, "reason": "決算日が取得できないため集中度を計算できません。"},
+    "policy_gaps": {"gaps": [], "covered": [], "message": "決算日が取得できないため政策カバレッジを判定できません。"},
+    "dividend_drops": [],
+    "monday_outlook": {"available": false, "reason": "先物・ADR の値が取得できませんでした。"},
+    "schedule_changes": [],
+    "triggers": {"available": false, "approaching": [], "met": [], "checked": 0, "reason": "株価の一部が取得できずトリガーを評価できませんでした。"},
+    "actionable": []
+  },
+  "constraints": {
+    "tax_state": {"realized_pl_jpy": null, "recorded": false, "nisa_used_estimate": {"value": null, "reliable": false}, "warnings": ["税制設定が確認されていません。"]},
+    "runway_bundle": {"cash_jpy": 10100, "weekly_investable_jpy": 12500, "purpose_assigned": false},
+    "attention": {"available": false, "reason": "保有数が確定できないため注意予算を計算できません。"},
+    "loss_harvest": {"available": false, "reason": "取得単価が取得できず含み損の税務価値を計算できません。"},
+    "liquidity": {"errors": ["出来高が取得できませんでした。"], "liquidity": {"profiles": [{"symbol": "SOXL", "available": false, "reason": "出来高が取得できず流動性を判定できません。"}], "trapped": []}},
+    "errors": []
+  },
+  "execution_audit": {
+    "window_days": 90,
+    "executions_available": false,
+    "survival": {"available": false, "total": 58, "executed": null, "unexecuted": null, "reason": "約定履歴が取得できていないため決定生存率を計算できません。これは執行率0%ではなく測れていないという意味です。"},
+    "shortfall": {"available": false, "reason": "約定価格が無いため執行ショートフォールを計算できません。"},
+    "performance": {"available": false, "reason": "執行済みと未執行を分離できません。"},
+    "reasons": [],
+    "errors": ["取引履歴CSVが見つかりませんでした。"]
+  },
+  "model_audit": {
+    "errors": [],
+    "score": {"available": false, "weeks": 4, "min_weeks": 26, "reason": "データ蓄積中（4/26週）。26週未満で結論を出すと偶然を模型の欠陥と誤認します。"},
+    "missing_factor": []
+  },
+  "week_diff": {"changed": [], "folded": []},
+  "cumulative_diff": {"available": false, "weeks": 2, "reason": "4週分の蓄積が必要です（現在2週）。"},
+  "narrative": {"crowding": {"SOXL": {"available": false, "reason": "購入時の基準点が記録されていないため混雑度を測れません。"}}},
+  "portfolio": {"total_jpy": 9200000, "cash_jpy": 10100, "total_pl_jpy": 6400000, "pl_pct": 228.6},
+  "holdings": [
+    {"name": "味の素", "symbol": "2802.T", "account": "特定", "shares": 400, "cost_price": 3906.03, "price": 5102, "price_source": "yfinance", "currency": "JPY", "value_jpy": 2040800, "pl_jpy": 478385, "pl_pct": 30.6, "weight_pct": 22.2, "week_change_pct": null, "leverage": 1,
+     "fundamentals": {"per": 21.4, "pbr": 2.9, "sector": "Consumer Defensive", "is_etf": false},
+     "technicals": {"last": 5102, "rsi14": null, "percent_b": null, "range_52w_position": null, "sma200_deviation_pct": null, "heat_state": "unknown", "heat_label": "判定不能"}},
+    {"name": "Direxion デイリー 半導体株 ブル 3倍 ETF", "symbol": "SOXL", "account": "特定", "shares": 275, "cost_price": 29.7495, "price": 160.99, "price_source": "yfinance", "currency": "USD", "value_jpy": 7146000, "pl_jpy": 5960000, "pl_pct": 441.2, "weight_pct": 77.8, "week_change_pct": null, "leverage": 3,
+     "fundamentals": {"is_etf": true, "expense_ratio": 0.0075},
+     "technicals": {"last": 160.99, "rsi14": null, "percent_b": null, "heat_state": "unknown", "heat_label": "判定不能"}}
+  ],
+  "indices": {},
+  "holding_news": {},
+  "market_news": [],
+  "moomoo": {
+    "fed_watch": {"available": false, "error": "OpenD に接続できませんでした（futu-api 未導入）。"},
+    "economic_events": {"available": false, "error": "OpenD に接続できませんでした。"},
+    "news": {"available": false, "error": "OpenD に接続できませんでした。"}
+  },
+  "forward_schedule": [],
+  "schedule_status": {
+    "2802.T": {"symbol": "2802.T", "name": "味の素", "fetched": false, "source": null, "status": "unavailable", "error": "yfinance の決算日取得に失敗しました。", "label": "取得できませんでした。予定なしではありません。"},
+    "SOXL": {"symbol": "SOXL", "name": "SOXL", "fetched": false, "source": null, "status": "unavailable", "error": "決算日を取得できませんでした。", "label": "取得できませんでした。"}
+  },
+  "projection": {},
+  "scenarios": [],
+  "positions_assumptions": {},
+  "vol_calibration": {"available": false, "reason": "価格系列が短く較正できませんでした。", "entries": []},
+  "monthly_contribution": 50000,
+  "prior_context": {"theses": [], "concerns": [], "lessons": []}
+}

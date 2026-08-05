@@ -40,6 +40,11 @@
             "type": "command",
             "command": "python scripts/hooks/verify_after_write.py",
             "timeout": 10000
+          },
+          {
+            "type": "command",
+            "command": "python scripts/hooks/eval_prompts_after_edit.py",
+            "timeout": 130000
           }
         ]
       }

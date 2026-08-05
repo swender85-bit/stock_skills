@@ -398,6 +398,60 @@ def build_sections(pack: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# 節ごとのモデル配分（改善2 / rightmodel）
+# ---------------------------------------------------------------------------
+
+MODELS_CFG_PATH = REPO / "config" / "synthesis_models.yaml"
+
+#: 通過率100%を必須とする節。ここは安い方に落とさない。
+#:   節1 照合 … ここが通らないと以降の全数値が条件付きになる
+#:   節6 事前決定 … 土曜の唯一の成果物であり、誤りが直接ポジションに効く
+CRITICAL_SECTIONS = ("reconcile", "decide")
+
+
+def load_section_models(path: Optional[Path] = None) -> dict:
+    """`config/synthesis_models.yaml` を読む。無ければ空（＝全節が既定モデル）。
+
+    **実測前は意図的に空に近い状態で出荷する。** 推測でモデルを落とすと、
+    どの節が劣化したのか分からないまま品質が下がる。埋めるのは
+    `eval_synthesis.py --sweep` の実測が出てから。
+    """
+    p = path or MODELS_CFG_PATH
+    if not p.exists():
+        return {}
+    try:
+        import yaml
+
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        log(f"synthesis_models.yaml を読めませんでした（既定モデルを使います）: {exc}")
+        return {}
+
+
+def resolve_section_model(section: dict, fallback: str, cfg: Optional[dict] = None) -> str:
+    """この節をどのモデルで書くか。
+
+    優先順: 節ID指定 > 節kind指定 > 設定のdefault > CLI/環境変数の既定。
+    **critical な節は、実測が無い限り既定（＝最上位）から下げない。**
+    """
+    cfg = cfg or {}
+    sections = cfg.get("sections") or {}
+    kinds = cfg.get("kinds") or {}
+    critical = tuple(cfg.get("critical_sections") or CRITICAL_SECTIONS)
+
+    chosen = (
+        sections.get(section.get("id"))
+        or kinds.get(section.get("kind"))
+        or cfg.get("default")
+        or fallback
+    )
+    if section.get("id") in critical and not cfg.get("measured_as_of"):
+        # 実測されていない状態で重要節を下げるのは、根拠のない品質低下でしかない
+        return cfg.get("default") or fallback
+    return str(chosen)
+
+
+# ---------------------------------------------------------------------------
 # state
 # ---------------------------------------------------------------------------
 
@@ -468,11 +522,19 @@ def looks_like_limit(text: str) -> bool:
 
 
 def run_claude(prompt: str, model: str, timeout: int) -> dict:
-    """`claude -p` を1回叩く。戻り値: {ok, text, interrupted, error}"""
+    """`claude -p` を1回叩く。
+
+    戻り値: {ok, text, interrupted, error, cost_usd, duration_sec, usage}
+
+    `cost_usd` / `duration_sec` / `usage` を返すのは改善2（モデル配分を実測で決める）
+    のため。**節ごとのコストと所要時間が記録されていない**と、どのモデルを
+    どの節に置くべきかを推測でしか決められない。
+    """
     exe = claude_bin()
     if not exe:
         return {"ok": False, "interrupted": False,
                 "error": "claude CLI が見つかりません（CLAUDE_BIN で指定可）"}
+    started = time.time()
 
     cmd = [exe, "-p", "--output-format", "json", "--allowedTools", ""]
     if model:
@@ -494,6 +556,7 @@ def run_claude(prompt: str, model: str, timeout: int) -> dict:
             except subprocess.TimeoutExpired:
                 kill_tree(proc.pid)
                 return {"ok": False, "interrupted": True,
+                        "duration_sec": round(time.time() - started, 1),
                         "error": f"タイムアウト({timeout}s)"}
         raw = out_p.read_text(encoding="utf-8", errors="replace").strip()
         errtxt = err_p.read_text(encoding="utf-8", errors="replace").strip()
@@ -511,15 +574,25 @@ def run_claude(prompt: str, model: str, timeout: int) -> dict:
             break
 
     text = (payload.get("result") or "").strip() if payload else raw
+    elapsed = round(time.time() - started, 1)
+    usage = (payload.get("usage") if isinstance(payload.get("usage"), dict) else {}) or {}
 
     if returncode != 0 or (payload and payload.get("is_error")):
         blob = f"{text}\n{errtxt}"
         return {"ok": False, "interrupted": looks_like_limit(blob),
+                "duration_sec": elapsed,
                 "error": (blob.strip()[:600] or f"exit={returncode}")}
     if not text:
-        return {"ok": False, "interrupted": False, "error": "空の応答"}
+        return {"ok": False, "interrupted": False, "duration_sec": elapsed,
+                "error": "空の応答"}
     return {"ok": True, "interrupted": False, "text": text,
-            "cost_usd": (payload.get("total_cost_usd") if payload else None)}
+            "cost_usd": (payload.get("total_cost_usd") if payload else None),
+            "duration_sec": elapsed,
+            "usage": {
+                "input_tokens": usage.get("input_tokens"),
+                "output_tokens": usage.get("output_tokens"),
+                "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
+            }}
 
 
 def build_prompt(spec: str, section: dict, material: dict, body_so_far: str) -> str:
@@ -757,6 +830,10 @@ def main() -> int:
     else:
         pack = json.loads(Path(state["pack_path"]).read_text(encoding="utf-8"))
 
+    models_cfg = load_section_models()
+    if models_cfg.get("measured_as_of"):
+        log(f"節別モデル配分を適用します（実測 {models_cfg['measured_as_of']}）")
+
     spec = SPEC_PATH.read_text(encoding="utf-8") if SPEC_PATH.exists() else ""
     if not spec:
         log(f"❌ 執筆仕様が見つかりません: {SPEC_PATH}")
@@ -777,21 +854,26 @@ def main() -> int:
             save_state(spath, state)
             return EXIT_INTERRUPTED
 
-        log(f"✍️  {s['id']} を執筆中（{written + 1}節目）...")
+        section_model = resolve_section_model(s, args.model, models_cfg)
+        log(f"✍️  {s['id']} を執筆中（{written + 1}節目 / model={section_model}）...")
         material = slice_pack(pack, s)
         body = body_for_prompt(state, out_dir) if s.get("needs_body") else ""
         prompt = build_prompt(spec, s, material, body)
 
         t0 = time.time()
         s["attempts"] = s.get("attempts", 0) + 1
-        res = run_claude(prompt, args.model, args.timeout)
+        res = run_claude(prompt, section_model, args.timeout)
 
         if res.get("ok"):
             fname = f"{s['order']:02d}_{s['id']}.md"
             (sec_dir / fname).write_text(res["text"] + "\n", encoding="utf-8")
             s["status"] = "done"
             s["file"] = f"{day}/{fname}"
+            # 節ごとの実測（改善2: モデル配分を推測でなく実測で決めるための入力）
             s["cost_usd"] = res.get("cost_usd")
+            s["duration_sec"] = res.get("duration_sec")
+            s["usage"] = res.get("usage")
+            s["model_used"] = section_model
             written += 1
             # ログより先に state を確定させる（ログ側の失敗で節を書き直さないため）
             save_state(spath, state)

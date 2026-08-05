@@ -123,6 +123,80 @@ HHI_WARNING = 0.35
 HHI_DANGER = 0.50
 
 
+# ---------------------------------------------------------------------------
+# 前提に符号を持たせる (改善4)
+# ---------------------------------------------------------------------------
+#
+# 前提HHI は「複数銘柄が同一前提に依存していても、どの指標にも映らない」を解く。
+# だが**同じ変数に逆向きの意味づけが同時に存在するケースを検出できない。**
+#
+#     両替計画  : 円高（¥155）を待つ → 円高が「好機」
+#     日本株保有: 円高は日本株の逆風  → 円高が「危機」
+#     → 同じ変数（USDJPY）の同じ方向に、好機と危機が同時に存在する
+#     → **円高が来た瞬間、両替の原資（日本株）が目減りする**
+#
+# これは「通貨の二重ロング」（米国株と日本の輸出企業を同時に持つと円高で同時に不利）
+# とは**別種**である。二重ロングは「同方向の集中」、こちらは
+# 「**逆方向の依存が相殺せず、片方の実行が他方を壊す**」。
+#
+# 前提の役割:
+#   opportunity … その方向に動くのを**待っている**（行動の前提）
+#   risk        … その方向に動くと**痛む**（保有の前提）
+#
+# thesis（保有の理由）からは risk 側が、target（購入・売却の計画）からは
+# opportunity 側が derive される。
+
+#: 正準前提 → (変数, その前提が崩れる方向)。
+#: 「円安継続」というテーゼが痛むのは USDJPY が down（円高）に振れたとき。
+ASSUMPTION_VARIABLES: dict[str, tuple[str, str]] = {
+    "円安継続": ("USDJPY", "down"),
+    "円高転換": ("USDJPY", "up"),
+    "AI設備投資拡大": ("AI_CAPEX", "down"),
+    "半導体サイクル上昇": ("SEMI_CYCLE", "down"),
+    "金利低下": ("RATES", "up"),
+    "金利上昇": ("RATES", "down"),
+    "インフレ沈静": ("INFLATION", "up"),
+    "インフレ継続": ("INFLATION", "down"),
+    "米国景気拡大": ("US_GROWTH", "down"),
+    "中国景気回復": ("CN_GROWTH", "down"),
+    "個人消費堅調": ("JP_CONSUMPTION", "down"),
+    "コスト転嫁継続": ("PRICING_POWER", "down"),
+    "株主還元拡大": ("SHAREHOLDER_RETURN", "down"),
+    "地政学安定": ("GEOPOLITICS", "down"),
+}
+
+#: 変数 × 方向 の読み下し。衝突メッセージを日本語で書くため。
+VARIABLE_LABELS: dict[str, tuple[str, str]] = {
+    #                    up            down
+    "USDJPY": ("円安", "円高"),
+    "AI_CAPEX": ("AI設備投資の拡大", "AI設備投資の失速"),
+    "SEMI_CYCLE": ("半導体サイクルの上昇", "半導体サイクルの下降"),
+    "RATES": ("金利上昇", "金利低下"),
+    "INFLATION": ("インフレ再燃", "インフレ沈静"),
+    "US_GROWTH": ("米国景気の拡大", "米国景気の後退"),
+    "CN_GROWTH": ("中国景気の回復", "中国景気の失速"),
+    "JP_CONSUMPTION": ("個人消費の回復", "個人消費の失速"),
+    "PRICING_POWER": ("価格転嫁の進展", "価格転嫁の限界"),
+    "SHAREHOLDER_RETURN": ("株主還元の拡大", "株主還元の縮小"),
+    "GEOPOLITICS": ("地政学の緊張緩和", "地政学リスクの上昇"),
+}
+
+#: 計画（行動の前提）として読むノート種別。ここから opportunity 側が出る。
+PLAN_NOTE_TYPES = ("target",)
+
+#: 保有の前提として読むノート種別。ここから risk 側が出る。
+HOLDING_NOTE_TYPES = ("thesis",)
+
+
+def _direction_label(variable: str, direction: str) -> str:
+    up, down = VARIABLE_LABELS.get(variable, (f"{variable}上昇", f"{variable}低下"))
+    return up if direction == "up" else down
+
+
+def _invert(direction: str) -> str:
+    return "down" if direction == "up" else "up"
+
+
 def extract_assumptions(text: str) -> list[str]:
     """散文から前提を抽出する。
 
@@ -337,6 +411,128 @@ def build_personal_scenarios(
     return scenarios
 
 
+# ---------------------------------------------------------------------------
+# 前提の衝突 (改善4)
+# ---------------------------------------------------------------------------
+
+
+def build_assumption_records(
+    notes: Iterable[dict],
+    holdings: Optional[list[dict]] = None,
+) -> list[dict]:
+    """ノートから符号つき前提レコードを作る。
+
+    thesis → 保有の前提（`role="risk"`。その方向に振れると痛む）
+    target → 計画の前提（`role="opportunity"`。その方向を**待っている**）
+
+    Returns
+    -------
+    list of dict
+        {"variable", "direction", "role", "assumption", "holdings",
+         "action_depends", "source_note", "symbol"}
+    """
+    held = {h.get("symbol", "") for h in (holdings or []) if h.get("symbol")}
+    records: list[dict] = []
+
+    for note in notes or []:
+        note_type = str(note.get("type") or note.get("note_type") or "").strip()
+        if note_type in PLAN_NOTE_TYPES:
+            role, action_depends = "opportunity", True
+        elif note_type in HOLDING_NOTE_TYPES:
+            role, action_depends = "risk", False
+        else:
+            continue
+
+        symbol = (note.get("symbol") or "").strip()
+        # 保有の前提は、保有していない銘柄のものを混ぜない（HHI が不当に下がる）。
+        # 計画の前提は、まだ保有していないからこそ計画なので落とさない。
+        if role == "risk" and held and symbol and symbol not in held:
+            continue
+
+        text = f"{note.get('content', '')} {note.get('trigger', '')}"
+        for assumption in extract_assumptions(text):
+            spec = ASSUMPTION_VARIABLES.get(assumption)
+            if spec is None:
+                continue
+            variable, break_direction = spec
+            # risk      … その前提が崩れる方向（break_direction）で痛む
+            # opportunity … その前提が実現する方向を待っている。
+            #               「円高を待つ」なら前提は「円高転換」で、実現方向は
+            #               break_direction の逆。
+            direction = break_direction if role == "risk" else _invert(break_direction)
+            records.append({
+                "variable": variable,
+                "direction": direction,
+                "role": role,
+                "assumption": assumption,
+                "symbol": symbol,
+                "holdings": [symbol] if symbol else [],
+                "action_depends": action_depends,
+                "source_note": note.get("id"),
+                "note_type": note_type,
+            })
+    return records
+
+
+def detect_conflicting_assumptions(assumptions: Iterable[dict]) -> list[dict]:
+    """同一変数の同一方向に opportunity と risk が併存する構造を返す (改善4).
+
+    条件:
+      1. 同じ (variable, direction) に `role="opportunity"` と `role="risk"` が同居
+      2. opportunity 側の `action_depends` が真
+
+    これは「**その行動を実行する条件が揃った瞬間、原資が毀損する**」構造である。
+
+    ## 検出しないもの（誤検出防止）
+
+    - 同方向の集中（通貨の二重ロング等）— opportunity 側が無いので出ない。
+      あれは `exposure.describe_tilt()` が見る別種の問題。
+    - opportunity 側があっても `action_depends` が偽なら出ない
+      （待ってはいるが、それに賭けた行動計画が無い状態）。
+    """
+    buckets: dict[tuple[str, str], dict[str, list[dict]]] = {}
+    for record in assumptions or []:
+        variable = record.get("variable")
+        direction = record.get("direction")
+        role = record.get("role")
+        if not variable or direction not in ("up", "down") or role not in ("opportunity", "risk"):
+            continue
+        buckets.setdefault((variable, direction), {"opportunity": [], "risk": []})[role].append(record)
+
+    conflicts: list[dict] = []
+    for (variable, direction), sides in sorted(buckets.items()):
+        opportunities = [r for r in sides["opportunity"] if r.get("action_depends")]
+        risks = sides["risk"]
+        if not opportunities or not risks:
+            continue
+
+        label = _direction_label(variable, direction)
+        exposed = sorted({s for r in risks for s in (r.get("holdings") or []) if s})
+        plans = sorted({r.get("assumption", "") for r in opportunities})
+        conflicts.append({
+            "variable": variable,
+            "direction": direction,
+            "direction_label": label,
+            "opportunity": opportunities,
+            "risk": risks,
+            "plans": plans,
+            "exposed_symbols": exposed,
+            "message": (
+                f"**{label}** は計画にとって好機ですが、保有にとっては逆風です"
+                f"（{', '.join(exposed) if exposed else '該当保有'}）。"
+                f"{label}が来た瞬間、その計画の原資が同時に目減りします。"
+                "これは同方向の集中（通貨の二重ロング）とは別種で、"
+                "**逆方向の依存が相殺せず、片方の実行が他方を壊す**構造です。"
+            ),
+            "what_to_check": (
+                f"計画の実行条件（{label}の水準）に到達したとき、原資が"
+                "いくら残っているかを先に見積もってください。"
+                "『条件が揃ったら実行する』は、原資が無事であることを暗黙に前提にしています。"
+            ),
+        })
+    return conflicts
+
+
 def analyze_assumption_space(
     notes: Optional[Iterable[dict]] = None,
     holdings: Optional[list[dict]] = None,
@@ -344,22 +540,42 @@ def analyze_assumption_space(
 ) -> dict:
     """前提空間の分析一式。thesis を読んで HHI とシナリオを返す。
 
-    notes 省略時は note_manager から thesis を読む。
+    notes 省略時は note_manager から thesis（保有の前提）と target（計画の前提）を読む。
+    target も読むのは改善4のため —— **計画の前提が入らないと、前提の衝突は
+    原理的に検出できない**（片側しか台帳に無い状態になる）。
     """
     if notes is None:
+        collected: list[dict] = []
         try:
             from src.data.note_manager import load_notes
 
-            notes = load_notes(note_type="thesis")
+            for note_type in HOLDING_NOTE_TYPES + PLAN_NOTE_TYPES:
+                for note in load_notes(note_type=note_type) or []:
+                    note.setdefault("type", note_type)
+                    collected.append(note)
         except Exception:
-            notes = []
+            collected = []
+        notes = collected
 
-    assumption_map = restrict_to_holdings(build_assumption_map(notes), holdings)
+    notes = list(notes)
+    # HHI は従来どおり thesis（保有の前提）だけで測る。計画の前提を混ぜると
+    # 「保有していない銘柄の前提」が exposure 0 で紛れ込み、HHI が不当に下がる。
+    holding_notes = [n for n in notes
+                     if str(n.get("type") or n.get("note_type") or "thesis")
+                     in HOLDING_NOTE_TYPES]
+    assumption_map = restrict_to_holdings(build_assumption_map(holding_notes), holdings)
     concentration = assumption_hhi(assumption_map, holdings)
     scenarios = build_personal_scenarios(assumption_map, holdings, limit=limit)
+
+    records = build_assumption_records(notes, holdings)
+    conflicts = detect_conflicting_assumptions(records)
 
     return {
         "assumption_map": assumption_map,
         "concentration": concentration,
         "scenarios": scenarios,
+        "records": records,
+        "conflicts": conflicts,
+        # 計画の前提が1件も無ければ「衝突なし」ではなく「片側しか無い」。
+        "conflict_detectable": any(r["role"] == "opportunity" for r in records),
     }

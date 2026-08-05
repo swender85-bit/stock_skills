@@ -22,3 +22,8 @@ data/weekly_snapshots/
 data/model_scorecard/
 data/cache/etf_holdings.json
 data/cache/macro_events.json
+# synthesis eval の実行記録（改善1）。生成物なのでコミットしない。
+# 台帳の形式（data/critics/）は README と雛形だけ追跡する。
+data/synthesis_evals/
+data/critics/*.json
+!data/critics/_example.json

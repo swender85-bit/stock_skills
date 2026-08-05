@@ -1,0 +1,23 @@
+{
+  "source_id": "_example",
+  "name": "（雛形）この形式でコピーして使う",
+  "_note": "アンダースコア始まりのファイルは list_critics() が実データとして数えません。実際の情報源を追加するときは data/critics/<source_id>.json を作ってください。ここに書かれている主張は形式を示すための架空の例であり、実際の的中記録ではありません。",
+  "theses": [
+    {
+      "date": "2026-07-16",
+      "claim": "（例）規制の事前織り込みで急落する",
+      "domain": "supply_demand",
+      "verified_on": "2026-07-16",
+      "score": "hit_exact",
+      "note": "方向も水準も当たった場合の書き方"
+    },
+    {
+      "date": "2026-07-20",
+      "claim": "（例）年内に$250へ到達する",
+      "domain": "price_level",
+      "verified_on": null,
+      "score": "pending",
+      "note": "結果が出るまでは pending。未検証を外れと数えないため分母に入らない"
+    }
+  ]
+}
