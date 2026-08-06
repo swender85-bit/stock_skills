@@ -149,8 +149,10 @@ def slice_pack(pack: dict, section: dict) -> dict:
         return {**meta, "reconciliation": pack.get("reconciliation")}
 
     if kind == "belief":
+        # 信念の変化は**開示原文**で検証するのが筋。価格ではなく事実で見る。
         return {**meta,
                 "falsification": pack.get("falsification"),
+                "primary_filings": pack.get("primary_filings"),
                 "holdings_overview": [_slim_holding(h)
                                       for h in pack.get("holdings") or []]}
 
@@ -258,9 +260,13 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 "scenarios": pack.get("scenarios")}
 
     if kind == "limits":
+        # 系譜サマリを書く節。一次観測が何件あったかがここの中身になる。
         return {**meta,
                 "vol_calibration": pack.get("vol_calibration"),
                 "positions_assumptions": pack.get("positions_assumptions"),
+                "primary_filings": {
+                    k: v for k, v in (pack.get("primary_filings") or {}).items()
+                    if k != "by_symbol"},
                 "projection": pack.get("projection")}
 
     # actions / summary は「これまでに書いた本文」が材料なので meta だけ

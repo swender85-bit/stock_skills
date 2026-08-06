@@ -611,6 +611,26 @@ def _safe_external_views(holdings: list[dict]) -> dict:
                         "『発言が無かった』ではありません。"}
 
 
+def _safe_primary_filings(holdings: list[dict]) -> dict:
+    """開示原文（SEC EDGAR / EDINET）。**一次観測の唯一の供給源。**
+
+    これが空の週は、レポートの全ての解釈が外部言説（深度1）と自己推論の上に
+    立っていることになる。取得できなかったことを黙って落とさない。
+    """
+    try:
+        from src.core.primary_source import build_primary_section, source_status
+
+        symbols = [h.get("symbol") for h in holdings or [] if h.get("symbol")]
+        section = build_primary_section(symbols, days=30, limit_per_symbol=5)
+        section["source_status"] = source_status()
+        return section
+    except Exception as e:
+        return {"available": False, "by_symbol": {}, "claims": [],
+                "primary_count": 0, "unavailable_symbols": [],
+                "note": f"一次開示を取得できませんでした（{type(e).__name__}）。"
+                        "**『開示が無かった』ではありません。**"}
+
+
 def _safe_falsification(holdings: list[dict]) -> dict:
     """反証条件の点検。**価格ではなく信念の変化**を最初に見るための材料。"""
     try:
@@ -739,6 +759,11 @@ def build_portfolio_briefing(
     with _timed("external_views"):
         external_views = _safe_external_views(holdings)
 
+    # 一次観測（開示原文）。**系譜台帳で唯一 深度0 の錨になる材料。**
+    # これが空の週の解釈は、全て外部言説と自己推論の上に立っている。
+    with _timed("primary_filings"):
+        primary_filings = _safe_primary_filings(holdings)
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     with _timed("falsification"):
@@ -800,6 +825,8 @@ def build_portfolio_briefing(
         # 外部批評家の直近見解（改善5）。各見解に citation が付いており、
         # 重み未測定・不足のものは本文の根拠に使ってはならない。
         "external_views": external_views,
+        # 開示原文（SEC EDGAR / EDINET）。系譜台帳で唯一 深度0 の錨になる。
+        "primary_filings": primary_filings,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),

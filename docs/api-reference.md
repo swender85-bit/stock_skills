@@ -539,6 +539,15 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `save_note(symbol: str, note_type: str, content: str, *, category: str='stock', base_dir: str='data/notes') -> str` — Save an investment note. Returns absolute path of saved file.
 - `list_notes(symbol: str | None=None, note_type: str | None=None, category: str | None=None, base_dir: str='data/notes') -> list[dict]` — Return notes matching the given filters.
 
+### src.core.primary_source
+
+荳谺｡隕ｳ貂ｬ縺ｮ萓帷ｵｦ -- 邉ｻ隴應ｼ夊ｨ医�ｮ蠎輔ｒ菴懊ｋ (2026-08-06).
+
+- `fetch_filings(symbol: str, days: int=30, limit: int=8, today: Optional[date]=None) -> dict` — 縺昴�ｮ驫俶氛縺ｮ荳谺｡髢狗､ｺ繧貞叙繧九ょｸょｴ縺ｧ蜿門ｾ怜��繧呈険繧雁��縺代ｋ縲�
+- `claims_from_filings(filings_result: dict) -> list[dict]` — 髢狗､ｺ繧堤ｳｻ隴懊▽縺阪�ｮ荳ｻ蠑ｵ�ｼ�Claim�ｼ峨↓螟画鋤縺吶ｋ縲�
+- `build_primary_section(symbols: list[str], days: int=30, limit_per_symbol: int=5, today: Optional[date]=None, persist: bool=False) -> dict` — 菫晄怏驫俶氛縺ｮ荳谺｡髢狗､ｺ繧偵∪縺ｨ繧√ｋ�ｼ医ヶ繝ｪ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕ｨ�ｼ峨�
+- `source_status() -> dict` — 荳谺｡諠�蝣ｱ貅舌′菴ｿ縺医ｋ迥ｶ諷九°繧剃ｸ隕ｧ縺吶ｋ�ｼ郁ｨｺ譁ｭ逕ｨ�ｼ峨�
+
 ### src.core.research.briefing_pack
 
 繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕滓�� 窶� Claude 縺ｮ豺ｱ謗倥ｊ synthesis 縺ｫ貂｡縺吶悟�ｨ譚先侭縲阪ｒ1縺､縺ｫ譚溘�ｭ繧句ｱ､縲�
@@ -999,6 +1008,17 @@ X�ｼ�Twitter�ｼ峨°繧画音隧募ｮｶ縺ｮ逋ｺ險繧貞叙蠕�
 - `fetch_recent_posts(handle: str, days: int=7, limit: int=20, timeout: int=45, caller: Any=None) -> dict` — 1繧｢繧ｫ繧ｦ繝ｳ繝医�ｮ逶ｴ霑醍匱險繧貞叙繧九�
 - `fetch_all(days: Optional[int]=None, config: Optional[dict]=None, caller: Any=None) -> dict` — 逋ｻ骭ｲ貂医∩繧｢繧ｫ繧ｦ繝ｳ繝医ｒ蜈ｨ驛ｨ蜿悶ｋ縲�
 - `trust_map(config: Optional[dict]=None) -> dict[str, str]` — source_id 竊� trust 繝�繧｣繧｢縲よ悴謖�螳壹�ｯ `standard`縲�
+
+### src.data.edgar_client
+
+SEC EDGAR -- **荳谺｡隕ｳ貂ｬ�ｼ�primary_observation�ｼ峨�ｮ萓帷ｵｦ貅�**�ｼ育ｱｳ蝗ｽ譬ｪ�ｼ�.
+
+- `user_agent() -> str`
+- `is_available() -> bool` — SEC 繧貞娼縺代ｋ迥ｶ諷九°縲�
+- `unavailable(reason: str='') -> dict`
+- `resolve_cik(symbol: str) -> Optional[str]` — 繝�繧｣繝�繧ｫ繝ｼ 竊� 10譯� CIK縲らｱｳ蝗ｽ荳雁ｴ縺ｧ縺ｪ縺代ｌ縺ｰ None縲�
+- `recent_filings(symbol: str, forms: tuple[str, ...]=DEFAULT_FORMS, limit: int=10, since: Optional[date]=None) -> dict` — 逶ｴ霑代�ｮ謠仙�ｺ譖ｸ鬘槭ｒ霑斐☆縲�
+- `key_financials(symbol: str) -> dict` — 荳ｻ隕∬ｲ｡蜍咎�逶ｮ縺ｮ**蟷ｴ蠎ｦ**蛟､繧� XBRL 縺九ｉ蜿悶ｋ縲�
 
 ### src.data.embedding_client
 
