@@ -446,3 +446,112 @@ def test_check_never_raises_on_broken_pack():
     # 検査自身の事故でレポート評価を止めない
     results = A.run_checks("本文", {"reconciliation": "壊れた型"}, section_kind="report")
     assert all(r["status"] in (A.PASS, A.FAIL, A.SKIP) for r in results)
+
+
+# ---------------------------------------------------------------------------
+# 個別銘柄分析にも同じ検査をかける（2026-08-06）
+#
+# 週次だけ厳しく個別が緩いと、**質問の形式によって判断の質が変わる**。
+# 「週次レポートのためだけの改善」になっていないかをここで縛る。
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def stock_pack() -> dict:
+    """個別パック（build_symbol_pack 相当）の最小形。"""
+    return {
+        "mode": "symbol",
+        "meta": {"symbol": "2737.T", "is_held": True},
+        "policy": {
+            "symbol": "2737.T",
+            "has_policy": True,
+            "assessments": [{
+                "policy_id": "pol_x", "symbol": "2737.T", "state": "met",
+                "label": "成立", "expired": False,
+                "response": "全株利確売却（過熱・サイクルピーク警戒）",
+                "triggers": [{"metric": "per", "op": ">=", "value": 18.0,
+                              "actual": 22.67, "state": "met"}],
+            }],
+            "rate_blocked": [],
+        },
+        "primary_filings": {"available": False, "primary_count": 0,
+                            "unavailable_symbols": ["2737.T"], "by_symbol": {},
+                            "note": "取得できませんでした"},
+        "external_views": {"available": False, "views": [], "usable_count": 0},
+        "falsification": {"falsified": [], "near": [], "unchecked": [],
+                          "missing": [], "intact": 1, "checked": 1, "total": 1},
+        "holdings": [],
+    }
+
+
+class TestStockAnalysisIsHeldToTheSameBar:
+    def test_stock_kind_runs_the_shared_checks(self, stock_pack):
+        names = {r["name"] for r in A.run_checks("本文", stock_pack, section_kind="stock")}
+        # 週次専用（分量・節順・孤児・循環）以外は個別にもかかる
+        assert "policy_first" in names
+        assert "primary_grounding_disclosed" in names
+        assert "growth_window_labeled" in names
+        assert "no_unavailable_as_zero" in names
+        assert "section_order" not in names          # 週次の固定骨格の話
+        assert "quiet_week_length" not in names      # 週次の分量制御の話
+
+    def test_buy_recommendation_is_allowed_for_stock_questions(self, stock_pack):
+        """「トヨタ買うべき？」に答えないのは機能ではなく欠陥。
+
+        買い推奨の禁止は**土曜の週次**の制約（完全情報×執行不能）であって、
+        個別質問に課すものではない。
+        """
+        names = {r["name"] for r in A.run_checks("今が買い場です。買うべきです。",
+                                                 stock_pack, section_kind="stock")}
+        assert "no_buy_recommendation" not in names
+
+    def test_buy_recommendation_still_blocked_in_weekly(self, stock_pack):
+        names = {r["name"] for r in A.run_checks("本文", stock_pack, section_kind="decide")}
+        assert "no_buy_recommendation" in names
+
+
+class TestPolicyFirst:
+    def test_ignoring_a_met_trigger_is_caught(self, stock_pack):
+        text = ("### 結論\n\nPER 22.67 と割高だが業績は好調。"
+                "まだ上値余地があるため保有継続が妥当と考える。\n")
+        res = A.check_policy_first(text, stock_pack)
+        assert res["status"] == A.FAIL
+        assert "新しく判断してはいけません" in res["message"]
+
+    def test_citing_the_policy_passes(self, stock_pack):
+        text = ("### 0. 政策上の応答\n\n"
+                "🔴 **政策のトリガーが成立しています**（per >= 18.0 / 現在 22.67）。"
+                "既定の応答は「全株利確売却」。ここで新たに判断しません。\n")
+        assert A.check_policy_first(text, stock_pack)["status"] == A.PASS
+
+    def test_skips_when_no_policy(self, stock_pack):
+        stock_pack["policy"] = {"has_policy": False, "assessments": []}
+        assert A.check_policy_first("本文", stock_pack)["status"] == A.SKIP
+
+    def test_skips_when_trigger_is_far(self, stock_pack):
+        stock_pack["policy"]["assessments"][0]["state"] = "far"
+        assert A.check_policy_first("本文", stock_pack)["status"] == A.SKIP
+
+    def test_expired_policy_does_not_trigger(self, stock_pack):
+        stock_pack["policy"]["assessments"][0]["expired"] = True
+        assert A.check_policy_first("本文", stock_pack)["status"] == A.SKIP
+
+
+class TestPrimaryGrounding:
+    def test_zero_primary_without_disclosure_is_caught(self, stock_pack):
+        text = "### 結論\n\n開示によれば業績は好調であり、割安である。\n"
+        res = A.check_primary_grounding_disclosed(text, stock_pack)
+        assert res["status"] == A.FAIL
+
+    def test_disclosing_the_gap_passes(self, stock_pack):
+        text = ("### 根拠の系譜\n\n"
+                "**一次観測は0件**。開示原文を取得できていないため、本分析は"
+                "外部言説（深度1）と自己推論の上に立っている。\n")
+        assert A.check_primary_grounding_disclosed(text, stock_pack)["status"] == A.PASS
+
+    def test_having_primary_observations_passes(self, stock_pack):
+        stock_pack["primary_filings"] = {"available": True, "primary_count": 4}
+        assert A.check_primary_grounding_disclosed("本文", stock_pack)["status"] == A.PASS
+
+    def test_skips_without_the_field(self):
+        assert A.check_primary_grounding_disclosed("本文", {})["status"] == A.SKIP

@@ -555,20 +555,95 @@ def check_cache_age_disclosed(text: str, pack: dict, **_kw) -> dict:
 # レジストリ
 # ---------------------------------------------------------------------------
 
+def check_policy_first(text: str, pack: dict, **_kw) -> dict:
+    """政策が成立しているなら、新しく判断せず既定の応答を出す (policy-ledger).
+
+    個別分析でこそ効く検査。「〇〇売るべき？」に対して、平時に決めた政策を
+    無視して**その場で新しい判断を作る**のが、この設計が最も防ぎたい失敗。
+    """
+    name = "policy_first"
+    principle = "policy-ledger 急変時は政策が先。新たに判断しない"
+    policy = pack.get("policy") or {}
+    if not policy.get("has_policy"):
+        return result(name, SKIP, principle, "有効な政策がないため検査対象外")
+
+    met = [a for a in policy.get("assessments") or []
+           if a.get("state") in ("met", "near") and not a.get("expired")]
+    if not met:
+        return result(name, SKIP, principle, "トリガーが成立・接近していません")
+
+    responses = [str(a.get("response") or "") for a in met]
+    # 応答の中身か、政策そのものへの言及があれば通す
+    if has_any(text, ["政策", "既定", "事前に決め", "トリガー"]) or \
+            any(r and r[:6] in text for r in responses):
+        return result(name, PASS, principle, "政策上の応答を提示しています")
+    return result(
+        name, FAIL, principle,
+        f"政策のトリガーが {len(met)}件 成立/接近しているのに、"
+        "政策への言及がありません。**ここで新しく判断してはいけません。**",
+        responses[:3],
+    )
+
+
+def check_primary_grounding_disclosed(text: str, pack: dict, **_kw) -> dict:
+    """一次観測が0件なら、接地していないことを明示する (provenance).
+
+    yfinance / Finnhub は加工済み指標＝外部言説（深度1）。
+    それだけで書いた分析を「開示に基づく」ように読ませない。
+    """
+    name = "primary_grounding_disclosed"
+    principle = "案C 一次観測に接地していないことを隠さない"
+    pf = pack.get("primary_filings")
+    if not isinstance(pf, dict):
+        return result(name, SKIP, principle, "一次観測の材料がパックにありません")
+    if pf.get("primary_count"):
+        return result(name, PASS, principle,
+                      f"一次観測 {pf['primary_count']}件に接地しています")
+
+    disclosure = ("一次観測", "開示原文", "接地", "深度1", "外部言説",
+                  "開示を取得できて", "取得できませんでした", "見えていません")
+    if has_any(text, disclosure):
+        return result(name, PASS, principle, "接地していないことを開示しています")
+    return result(
+        name, FAIL, principle,
+        "一次観測が0件なのに、その旨の記載がありません。"
+        "この分析は外部言説（深度1）と自己推論の上に立っています。",
+    )
+
+
 #: 検査名 → (関数, 適用する節の kind。None は全節)
-#: `weekly_deep_driver.build_sections()` の kind と対応する。
+#:
+#: kind は2系統ある:
+#:   週次  … `weekly_deep_driver.build_sections()` の kind
+#:   個別  … "stock"（`.claude/prompts/stock_deep.md` で書く個別銘柄レポート全体）
+#:
+#: **個別分析にも同じ検査をかける。** 週次だけ厳しく個別が緩いと、
+#: 「質問の形式によって判断の質が変わる」ことになる。
 CHECKS: dict[str, tuple[Callable[..., dict], Optional[frozenset]]] = {
     "no_unavailable_as_zero": (check_no_unavailable_as_zero, None),
     "circular_disclosed": (check_circular_disclosed, None),
-    "no_buy_recommendation": (check_no_buy_recommendation, None),
+    "no_buy_recommendation": (check_no_buy_recommendation, frozenset({
+        "verdict", "reconcile", "belief", "forward", "constraints", "decide",
+        "audit", "limits", "holding", "heat", "macro", "schedule",
+        "opportunity", "cumulative", "report",
+    })),
     "quiet_week_length": (check_quiet_week_length, frozenset({"report"})),
     "orphan_flagged": (check_orphan_flagged, frozenset({"reconcile", "report"})),
     "section_order": (check_section_order, frozenset({"report"})),
     "growth_window_labeled": (check_growth_window_labeled,
-                              frozenset({"holding", "heat", "report"})),
+                              frozenset({"holding", "heat", "report", "stock"})),
     "cache_age_disclosed": (check_cache_age_disclosed,
-                            frozenset({"forward", "macro", "schedule", "report"})),
+                            frozenset({"forward", "macro", "schedule", "report",
+                                       "stock"})),
+    "policy_first": (check_policy_first, frozenset({"decide", "report", "stock"})),
+    "primary_grounding_disclosed": (check_primary_grounding_disclosed,
+                                    frozenset({"belief", "limits", "report", "stock"})),
 }
+
+#: 個別銘柄レポートに適用する検査の kind。
+#: **買い推奨の禁止は週次(土曜)の制約であって、個別分析には課さない。**
+#: 「トヨタ買うべき？」に答えないのは、機能ではなく欠陥。
+STOCK_KIND = "stock"
 
 
 def run_checks(

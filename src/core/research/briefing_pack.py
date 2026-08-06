@@ -26,6 +26,7 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from src.core.portfolio.weekly import (
@@ -922,6 +923,31 @@ def build_symbol_briefing(
     except Exception:
         held = None
 
+    # --- 個別分析にも週次と同じ判断層を通す -------------------------------
+    #
+    # ここが無いと「週次レポートだけが賢い」状態になる。実際そうなっていた:
+    # 政策・反証条件・一次観測・外部批評家・前提の衝突は PF パックにしか
+    # 入っておらず、「トヨタってどう？」の経路には一切届いていなかった。
+    #
+    # **判断の質を、質問の形式で変えてはいけない。**
+    holding_row = {
+        "symbol": symbol,
+        "name": (detail or info or {}).get("name") or symbol,
+        "price": (info or {}).get("price"),
+        "weight_pct": None,
+        "fundamentals": dict(detail or info or {}),
+        "technicals": _compact_technicals(technicals),
+        "leverage": _leverage_of(symbol),
+    }
+    policy = _safe_symbol_policy(holding_row)
+    falsification = _safe_falsification([holding_row])
+    primary_filings = _safe_primary_filings([{"symbol": symbol}])
+    external_views = _safe_external_views([{"symbol": symbol}])
+    # 前提の衝突（改善4）は PF 全体の話だが、**個別判断にこそ効く**:
+    # 「この銘柄のテーゼは円安継続が前提。だが円高を待つ計画がある」は、
+    # その銘柄を買う/持ち続ける判断に直接ぶつかる。
+    assumption_space = _safe_assumption_space_for(symbol)
+
     return {
         "pack_version": PACK_VERSION,
         "mode": "symbol",
@@ -953,4 +979,96 @@ def build_symbol_briefing(
         "forward_schedule": _forward_schedule(moomoo, symbol_forward),
         "schedule_status": (symbol_forward or {}).get("schedule_status") or {},
         "prior_context": prior_context,
+        # --- 週次と同じ判断層（個別質問でも必ず通す） ---
+        # 政策が先。急変時に新しく判断させないため（policy-ledger.md）。
+        "policy": policy,
+        # 価格ではなく信念の変化を見る
+        "falsification": falsification,
+        # 開示原文（深度0の錨）。ニュースより系譜が強い
+        "primary_filings": primary_filings,
+        # 外部批評家。citation に従い、未測定なら根拠にしない
+        "external_views": external_views,
+        # 前方イベント（政策カバレッジの穴・トリガー距離を含む）
+        "forward": symbol_forward,
+        # 前提の衝突（この銘柄のテーゼが、待っている計画と食い違っていないか）
+        "assumption_space": assumption_space,
     }
+
+
+def _safe_assumption_space_for(symbol: str) -> dict:
+    """前提空間のうち、この銘柄に関係する部分だけを返す（改善4）。
+
+    PF 全体の HHI ではなく、**この銘柄の前提が他の計画とぶつかっていないか**を見る。
+    「円安継続が前提の銘柄」を持ちながら「円高¥155で両替する計画」があるなら、
+    計画の実行条件が揃った瞬間にこの銘柄が毀損する。
+    """
+    try:
+        from src.core.risk.assumptions import analyze_assumption_space
+
+        result = analyze_assumption_space(holdings=[{"symbol": symbol, "value": 1.0}])
+        conflicts = [
+            c for c in result.get("conflicts") or []
+            if not c.get("exposed_symbols") or symbol in c["exposed_symbols"]
+        ]
+        return {
+            "conflicts": conflicts,
+            "conflict_detectable": result.get("conflict_detectable"),
+            "assumptions": (result.get("assumption_map") or {}),
+            "note": ("この銘柄のテーゼが依存する前提と、待っている計画の前提が"
+                     "同じ変数で食い違っていないかを見る。"),
+        }
+    except Exception as e:
+        return {"conflicts": [], "conflict_detectable": None,
+                "note": f"前提空間を評価できませんでした（{type(e).__name__}）。"}
+
+
+def _leverage_of(symbol: str) -> Optional[float]:
+    """保有設定からレバレッジ倍率を引く（金利ゲートの適用判定に使う）。"""
+    try:
+        import yaml
+
+        root = Path(__file__).resolve().parent.parent.parent.parent
+        cfg = yaml.safe_load(
+            (root / "config" / "weekly_holdings.yaml").read_text(encoding="utf-8")) or {}
+        for h in cfg.get("holdings") or []:
+            if str(h.get("quote_symbol") or "") == symbol:
+                return h.get("leverage")
+    except Exception:
+        pass
+    return None
+
+
+def _safe_symbol_policy(holding: dict) -> dict:
+    """その銘柄の政策上の応答（案A）。**個別質問でもこれを先に引く。**
+
+    `.claude/rules/policy-ledger.md`:
+    > 急変時の質問では、まず ask を実行して政策上の応答を提示する。
+    > 分析はその後、またはユーザーが明示的に求めた場合のみ。
+
+    週次レポートにしか政策が入っていなかったため、「〇〇売るべき？」という
+    **最も政策が要る場面**でこれが引かれていなかった。
+    """
+    symbol = holding.get("symbol") or ""
+    try:
+        from src.core.policy import policy_response, rate_state_from_yield_curve
+        from src.core.portfolio.falsification import market_state_from_holding
+
+        state = market_state_from_holding(holding)
+
+        # 長期金利ゲート（改善6）。レバレッジ商品の投入判断に効く。
+        try:
+            if holding.get("leverage") and float(holding["leverage"]) >= 2:
+                from src.core.market_dashboard import get_yield_curve
+
+                state.update(rate_state_from_yield_curve(get_yield_curve()))
+        except Exception:
+            pass
+
+        result = policy_response(symbol, state, leverage=holding.get("leverage"))
+        result["market_state"] = state
+        return result
+    except Exception as e:
+        return {"symbol": symbol, "has_policy": False, "assessments": [],
+                "answer": f"政策を照会できませんでした（{type(e).__name__}）。"
+                          "**『政策が無い』ではありません。**",
+                "error": True}
