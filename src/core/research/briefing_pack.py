@@ -673,6 +673,24 @@ def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
     }
 
 
+def _safe_forward_horizon(holdings: list[dict], forward: Optional[dict]) -> dict:
+    """数ヶ月先の決算・配当カレンダー（実効エクスポージャー付き）。
+
+    既存の前方イベントは**翌1週間しか見ていない**。それだけを見ていると、
+    3週間後に PF の2割が決算を通過することに気づけない。
+    """
+    try:
+        from src.core.risk.forward_horizon import build_forward_horizon
+
+        return build_forward_horizon(
+            holdings, (forward or {}).get("lookthrough"))
+    except Exception as e:
+        return {"available": False, "events": [], "unavailable": [],
+                "no_earnings": [], "by_month": {},
+                "note": f"前方カレンダーを作れませんでした（{type(e).__name__}: {e}）。"
+                        "**『予定なし』ではありません。**"}
+
+
 def _safe_primary_filings(holdings: list[dict]) -> dict:
     """開示原文（SEC EDGAR / EDINET）。**一次観測の唯一の供給源。**
 
@@ -844,6 +862,12 @@ def build_portfolio_briefing(
     with _timed("primary_filings"):
         primary_filings = _safe_primary_filings(holdings)
 
+    # 前方カレンダー（数ヶ月先）。
+    # 「翌週ゼロ」と「3ヶ月ゼロ」はまったく違う。翌週だけを見ていると、
+    # 3週間後に PF の2割（NVDA 実効20%）が決算を通過することに気づけない。
+    with _timed("forward_horizon"):
+        horizon = _safe_forward_horizon(holdings, forward)
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     with _timed("falsification"):
@@ -911,6 +935,8 @@ def build_portfolio_briefing(
         "external_views": external_views,
         # 開示原文（SEC EDGAR / EDINET）。系譜台帳で唯一 深度0 の錨になる。
         "primary_filings": primary_filings,
+        # 数ヶ月先の決算・配当（保有＋ETF構成銘柄・実効エクスポージャー付き）
+        "forward_horizon": horizon,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),

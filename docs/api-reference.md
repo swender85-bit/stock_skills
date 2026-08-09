@@ -642,6 +642,13 @@ ETF 繝ｫ繝�繧ｯ繧ｹ繝ｫ繝ｼ 窶� 荳ｭ霄ｫ縺ｮ莨∵･ｭ�
 - `build_lookthrough(holdings: list[dict], *, cfg: Optional[dict]=None, use_cache: bool=True) -> dict` — 菫晄怏繧偵御ｸｭ霄ｫ縺ｮ莨∵･ｭ縲阪∪縺ｧ螻暮幕縺励∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ繧貞粋邂励☆繧九�
 - `lookthrough_events(lookthrough: dict, *, as_of=None, events_by_symbol: Optional[dict]=None, min_effective_pct: Optional[float]=None) -> dict` — 螻暮幕縺励◆讒区�宣釜譟�縺ｮ鄙碁ｱ繧､繝吶Φ繝医ｒ縲∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ莉倥″縺ｧ霑斐☆縲�
 
+### src.core.risk.forward_horizon
+
+蜑肴婿繧ｫ繝ｬ繝ｳ繝繝ｼ�ｼ域焚繝ｶ譛亥�茨ｼ� -- 縲檎ｿ碁ｱ縲阪□縺代ｒ隕九ｋ讒矩繧偵ｄ繧√ｋ.
+
+- `build_forward_horizon(holdings: list[dict], lookthrough: Optional[dict]=None, *, as_of: Optional[date]=None, horizon_days: int=DEFAULT_HORIZON_DAYS, events_by_symbol: Optional[dict]=None, min_effective_pct: float=0.5) -> dict` — 菫晄怏�ｼ畿TF讒区�宣釜譟�縺ｮ豎ｺ邂励�ｻ驟榊ｽ薙ｒ縲∵焚繝ｶ譛亥�医∪縺ｧ荳ｦ縺ｹ繧九�
+- `format_horizon(horizon: Optional[dict], limit: int=25) -> str` — 繝ｬ繝昴�ｼ繝育畑縺ｮ陦ｨ縲�**螳溷柑%莉倥″**縺ｧ縲後＞縺､菴�%縺碁夐℃縺吶ｋ縺九阪ｒ隕九○繧九�
+
 ### src.core.risk.scenario_analysis
 
 Scenario-based causal chain analysis for portfolio stress testing (KIK-341).
