@@ -67,6 +67,11 @@ def fetch_filings(
         result["market"] = "JP"
         result["source"] = "EDINET"
         result["filings"] = (result.get("filings") or [])[:limit]
+        if not result.get("available"):
+            # ⚠️ レポートに設定手順を書かない（本人が見送りを決めた経路）。
+            # 事実だけ残す: 取れなかった。**「開示が無い」ではない。**
+            result["reason"] = "日本株の開示原文は取得していません。"
+            result["setup_hint_suppressed"] = True
         return result
 
     from src.data import edgar_client
@@ -185,10 +190,19 @@ def build_primary_section(
         note_parts.append(
             "一次観測を1件も取得できませんでした。"
             "**この週の解釈は全て外部言説（深度1）と自己推論の上に立っています。**")
-    if unavailable_symbols:
+
+    # 米国株の取得失敗と、日本株（そもそも取りに行っていない）を分けて書く。
+    # 混ぜると「米国も取れなかった」と誤読される。
+    us_missing = [s for s in unavailable_symbols if not str(s).upper().endswith(".T")]
+    jp_missing = [s for s in unavailable_symbols if str(s).upper().endswith(".T")]
+    if us_missing:
         note_parts.append(
-            f"⚠️ {', '.join(unavailable_symbols)} は開示を取得できませんでした。"
+            f"⚠️ {', '.join(us_missing)} は開示を取得できませんでした。"
             "**『開示が無かった』ではありません。**")
+    if jp_missing:
+        note_parts.append(
+            f"ℹ️ 日本株（{', '.join(jp_missing)}）の開示原文は取得対象外です。"
+            "これらの銘柄は外部言説（ニュース・指標）のみで評価しています。")
 
     return {
         "available": available,
@@ -220,7 +234,10 @@ def source_status() -> dict:
             "market": "JP",
             "env": "EDINET_API_KEY",
             "cost": "無料（要・無料登録）",
+            # 本人が見送りを決めた経路なので、レポートに設定手順を出さない。
+            # 状態だけ持ち、催促はしない。
+            "opt_out": not edinet_client.is_available(),
             "reason": None if edinet_client.is_available()
-                      else edinet_client.unavailable()["reason"],
+                      else "日本株の開示原文は取得対象外（本人判断）。",
         },
     }

@@ -632,6 +632,16 @@ Deep research orchestration for stocks, industries, and markets (KIK-367).
 - `research_market(market: str, yahoo_client_module=None, *, research_client: ResearchClient | None=None) -> dict` — Run market overview research via yfinance + Grok.
 - `research_business(symbol: str, yahoo_client_module: StockInfoProvider, *, research_client: ResearchClient | None=None) -> dict` — Run business model research combining yfinance and Grok.
 
+### src.core.research.watch_plan
+
+逶｣隕冶ｨ育判縺ｮ閾ｪ蜍募ｰ主�ｺ -- 縲御ｻ翫�ｮ菫晄怏縲阪°繧峨∬ｦ九ｋ縺ｹ縺阪ｂ縺ｮ繧呈ｯ主屓豎ｺ繧√ｋ.
+
+- `classify_holdings(holdings: list[dict], lookthrough: Optional[dict]=None) -> dict` — 菫晄怏繝ｻETF邨檎罰繝ｻ髱樔ｿ晄怏繧呈�守､ｺ逧�縺ｫ蛻�縺代ｋ縲�
+- `derive_indices(holdings: list[dict], lookthrough: Optional[dict]=None) -> list[dict]` — 菫晄怏縺九ｉ隕九ｋ縺ｹ縺肴欠謨ｰ繧呈ｱｺ繧√ｋ縲�**險ｭ螳壹↓譖ｸ縺九↑縺�縲�**
+- `derive_peers(holdings: list[dict], cfg: Optional[dict]=None) -> dict` — 遶ｶ蜷医ｒ豎ｺ繧√ｋ縲�**菫晄怏縺励※縺�縺ｪ縺�驫俶氛縺ｮ遶ｶ蜷医�ｯ霑ｽ繧上↑縺�縲�**
+- `build_watch_plan(holdings: list[dict], lookthrough: Optional[dict]=None) -> dict` — 莉翫�ｮ菫晄怏縺九ｉ縲∽ｻ企ｱ隕九ｋ縺ｹ縺阪ｂ縺ｮ繧貞�ｨ驛ｨ蟆主�ｺ縺吶ｋ縲�
+- `format_watch_plan(plan: Optional[dict]) -> str`
+
 ### src.core.return_estimate
 
 Portfolio return estimation with 3 scenarios (KIK-359).
@@ -1400,6 +1410,22 @@ CSV 縺瑚ｪｭ繧√↑縺�繝ｻ譏守ｴｰ縺瑚ｦ九▽縺九ｉ縺ｪ�
 #### class TradeHistoryUnavailable
 CSV 縺瑚ｪｭ繧√↑縺�繝ｻ蜿門ｼ募ｱ･豁ｴ縺ｮ隕句�ｺ縺励′隕九▽縺九ｉ縺ｪ縺�縲�
 
+
+### src.data.resolver
+
+螟壽ｮｵ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ隗｣豎ｺ -- 縲悟叙蠕励〒縺阪↑縺九▲縺溘阪〒豁｢繧√↑縺�.
+
+- `resolve(chain: list[tuple[str, Callable[[], Any]]], is_valid: Optional[Callable[[Any], bool]]=None, label: str='') -> dict` — 謇区ｮｵ繧帝�縺ｫ隧ｦ縺励�**譛蛻昴↓謌仙粥縺励◆繧ゅ�ｮ繧定ｿ斐☆**縲�
+- `resolve_price(symbol: str) -> dict` — 萓｡譬ｼ繧偵∽ｽｿ縺医ｋ謇区ｮｵ繧貞�ｨ驛ｨ隧ｦ縺励※蜿悶ｋ縲�
+- `resolve_history(symbol: str, period: str='1y') -> dict` — 萓｡譬ｼ邉ｻ蛻励ＡTicker.history` 縺檎ｩｺ縺ｧ繧� `download` 縺碁壹ｋ縺薙→縺後≠繧九�
+- `resolve_earnings_dates(symbol: str) -> dict` — 豎ｺ邂玲律縲Ｄalendar 竊� earnings_dates 縺ｮ鬆�縺ｫ隧ｦ縺吶�
+- `resolve_fundamentals(symbol: str) -> dict` — 荳ｻ隕√ヵ繧｡繝ｳ繝縲Ｚfinance 縺梧ｬ縺代◆繧� SEC XBRL�ｼ育ｱｳ蝗ｽ譬ｪ縺ｮ縺ｿ�ｼ峨〒陬懊≧縲�
+- `resolve_news(symbol: str, days: int=7, limit: int=3) -> dict` — 繝九Η繝ｼ繧ｹ縲Ｇinnhub�ｼ育ｱｳ蝗ｽ�ｼ俄�� yfinance�ｼ域律邀ｳ荳｡蟇ｾ蠢懶ｼ峨�
+
+#### class Attempt
+1蝗槭�ｮ蜿門ｾ苓ｩｦ陦後�ｮ險倬鹸縲�**菴輔ｒ隧ｦ縺励※菴輔′襍ｷ縺阪◆縺九ｒ谿九☆縲�**
+
+- `as_dict() -> dict`
 
 ### src.data.user_profile
 

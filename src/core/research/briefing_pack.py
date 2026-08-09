@@ -689,6 +689,24 @@ def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
     }
 
 
+def _safe_watch_plan(holdings: list[dict], forward: Optional[dict]) -> dict:
+    """今の保有から、見るべきもの（指数・競合・構成銘柄）を導出する。
+
+    **保有が変われば監視対象も自動で変わる。**
+    また、直接保有と「ETF経由のみの曝露」を明示的に分けるので、
+    INTC のような非保有銘柄が保有と同じ見た目で並ばない。
+    """
+    try:
+        from src.core.research.watch_plan import build_watch_plan
+
+        return build_watch_plan(holdings, (forward or {}).get("lookthrough"))
+    except Exception as e:
+        return {"note": f"監視計画を導出できませんでした（{type(e).__name__}: {e}）。",
+                "holdings": {"direct": [], "etf_only": []},
+                "indices": [], "peers": {"plan": {}, "stale_config": []},
+                "constituents": []}
+
+
 def _safe_composition_check() -> dict:
     """投信の想定構成が、連動対象指数に追随しているかを実測する。
 
@@ -1019,6 +1037,12 @@ def build_portfolio_briefing(
     with _timed("composition_check"):
         composition = _safe_composition_check()
 
+    # 監視計画を**今の保有から毎回導出する**。
+    # 手書き設定に固定していると、売却済み銘柄（2737.T）の競合を追い続け、
+    # 新しく買った銘柄の競合は追わない、という状態が静かに続く。
+    with _timed("watch_plan"):
+        watch = _safe_watch_plan(holdings, forward)
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     with _timed("falsification"):
@@ -1096,6 +1120,8 @@ def build_portfolio_briefing(
         "regime": regime,
         # 投信の想定構成が指数に追随しているかの実測（未確認→精度が測定済み）
         "composition_check": composition,
+        # 今の保有から導出した監視計画（指数・競合・構成銘柄・陳腐化検出）
+        "watch_plan": watch,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),

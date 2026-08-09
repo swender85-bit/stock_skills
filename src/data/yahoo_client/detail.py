@@ -131,6 +131,58 @@ def clear_fetch_errors() -> None:
     _FETCH_ERRORS.clear()
 
 
+def _resolve_minimal(symbol: str) -> Optional[dict]:
+    """`info` が取れなかったときの最後の手段。
+
+    価格だけでも取れれば、レポートは「値動きが不明」ではなく
+    「値は取れたが指標は取れなかった」と書ける。**その差は大きい。**
+
+    どの経路で取れたかを `price_source` / `resolution` に残し、
+    **予備で取った値を一次経路の値のように見せない。**
+    """
+    try:
+        from src.data.resolver import resolve_history, resolve_price
+    except Exception:
+        return None
+
+    price = resolve_price(symbol)
+    if not price.get("available"):
+        _record_fetch_error(
+            symbol,
+            f"全経路で価格を取得できませんでした（試行: "
+            f"{', '.join(a['source'] for a in price.get('attempts') or [])}）")
+        return None
+
+    result: dict = {
+        "symbol": symbol,
+        "price": price["value"],
+        "price_source": price["source"],
+        "resolution": {
+            "price": {"source": price["source"],
+                      "fallback_used": price.get("fallback_used"),
+                      "attempts": price.get("attempts")},
+        },
+        "degraded": True,
+        "degraded_note": (
+            f"基本情報が取得できず、価格のみ {price['source']} から復旧しました。"
+            "PER・成長率などの指標は**取得できていません**（0ではありません）。"),
+    }
+
+    # 52週レンジくらいは系列から作れる。指標が全滅した週でも過熱は測れる。
+    hist = resolve_history(symbol, period="1y")
+    if hist.get("available"):
+        try:
+            closes = hist["value"]["Close"].dropna()
+            result["fifty_two_week_high"] = float(closes.max())
+            result["fifty_two_week_low"] = float(closes.min())
+            result["resolution"]["history"] = {"source": hist["source"]}
+        except Exception:
+            pass
+
+    _sanitize_anomalies(result)
+    return result
+
+
 def get_stock_info(symbol: str) -> Optional[dict]:
     """Fetch basic stock information for a single symbol.
 
@@ -160,8 +212,13 @@ def get_stock_info(symbol: str) -> Optional[dict]:
         )
 
         if not info or info.get("regularMarketPrice") is None:
-            # **失敗を握り潰さない。** 呼び出し側が「データが無い」と誤読しないよう、
-            # 直近の失敗理由を記録しておく（`last_fetch_error()` で参照できる）。
+            # ⚠️ **ここで諦めない。** 運用ルール:
+            #   「取得できなかったら他のあらゆる手段を講じて取得できるまでトライする」
+            # `info` が落ちても fast_info / download / finnhub が通ることがある。
+            # 実測で確認済みの経路を順に試し、**全滅して初めて** None を返す。
+            resolved = _resolve_minimal(symbol)
+            if resolved is not None:
+                return resolved
             _record_fetch_error(symbol, fetch_error or "価格が取得できませんでした")
             return None
 
