@@ -817,6 +817,8 @@ def main() -> int:
                     help="外部批評家(X)の取り込みをスキップする")
     ap.add_argument("--critic-days", type=int, default=7,
                     help="批評家の発言を何日分取り込むか")
+    ap.add_argument("--force-low-quality", action="store_true",
+                    help="価格が取れていないパックでも強制的にレポートを書く（非推奨）")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -857,6 +859,28 @@ def main() -> int:
             log("❌ パックを用意できませんでした")
             return EXIT_ERROR
         pack = json.loads(pack_path.read_text(encoding="utf-8"))
+
+        # 🔴 価格が取れていないパックからレポートを書かない。
+        #
+        # 2026-08-08、10銘柄中9銘柄の価格が null のままレポートが生成・保存され、
+        # 全節が「取得できず」で埋まった状態で vault に届いた。
+        # **書けない材料から書かせたことが最大の失敗**であり、
+        # 正しい動作は「書かずに中断し、次の起動で取り直す」。
+        # WeeklyDeepResume が3時間ごとに動くので、放置しても自動で回復する。
+        quality = (pack.get("meta") or {}).get("data_quality") or {}
+        if quality and not quality.get("usable", True) and not args.force_low_quality:
+            log(f"⛔ {quality.get('verdict')}")
+            log("   レポートを書かずに中断します。次の起動（最大3時間後）で取り直します。")
+            log("   すぐ書かせたい場合: --force-low-quality")
+            try:
+                (out_dir / f"lowquality_{day}.json").write_text(
+                    json.dumps({"at": datetime.now(timezone.utc).isoformat(),
+                                "pack": str(pack_path), "quality": quality,
+                                "network": (pack.get("meta") or {}).get("network")},
+                               ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+            return EXIT_INTERRUPTED
         state = {
             "date": day,
             "pack_path": str(pack_path.resolve()),

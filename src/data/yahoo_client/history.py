@@ -28,9 +28,19 @@ def get_price_history(symbol: str, period: str = "1y") -> Optional[pd.DataFrame]
     try:
         time.sleep(1)  # rate-limit
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(period=period)
+
+        # 一時失敗を確定にしない (2026-08-08 の週次全滅の再発防止)。
+        # 空の DataFrame も再試行対象にする（通信断では例外ではなく空が返る）。
+        from src.data.yahoo_client._net import with_retry
+
+        hist, fetch_error = with_retry(
+            lambda: ticker.history(period=period),
+            label=f"{symbol} の価格系列",
+            is_empty=lambda df: df is None or getattr(df, "empty", True),
+        )
         if hist is None or hist.empty:
-            print(f"[yahoo_client] No price history for {symbol}")
+            print(f"[yahoo_client] No price history for {symbol}"
+                  + (f" ({fetch_error})" if fetch_error else ""))
             return None
         # Keep only the standard OHLCV columns
         expected_cols = ["Open", "High", "Low", "Close", "Volume"]

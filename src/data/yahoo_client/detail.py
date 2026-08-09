@@ -112,11 +112,33 @@ def _build_dividend_history_from_actions(
         return [], []
 
 
+#: 直近の取得失敗理由。**「データが無い」と「取れなかった」を区別するため。**
+#: 2026-08-08 の週次は price=None / error=None という状態で出力され、
+#: レポートが「取得できず」としか書けなかった。理由を残せば原因まで書ける。
+_FETCH_ERRORS: dict[str, str] = {}
+
+
+def _record_fetch_error(symbol: str, reason: str) -> None:
+    _FETCH_ERRORS[symbol] = reason
+
+
+def last_fetch_error(symbol: str) -> Optional[str]:
+    """その銘柄の直近の取得失敗理由。成功していれば None。"""
+    return _FETCH_ERRORS.get(symbol)
+
+
+def clear_fetch_errors() -> None:
+    _FETCH_ERRORS.clear()
+
+
 def get_stock_info(symbol: str) -> Optional[dict]:
     """Fetch basic stock information for a single symbol.
 
     Returns a dict with standardized keys, or None if the fetch fails entirely.
     Individual fields that are unavailable are set to None.
+
+    一時失敗はリトライする（`_net.with_retry`）。ネットワークが落ちている間の
+    1回の失敗を「今週は取得不能」として確定させないため。
     """
     # Check cache first
     cached = _read_cache(symbol)
@@ -125,9 +147,22 @@ def get_stock_info(symbol: str) -> Optional[dict]:
 
     try:
         ticker = yf.Ticker(symbol)
-        info = ticker.info
+
+        # 一時失敗を確定にしない (2026-08-08 の週次全滅の再発防止)。
+        # yfinance は通信が落ちていると**例外ではなく空 dict** を返すことがあるので、
+        # 例外だけでなく「価格が無い」ことも再試行の対象にする。
+        from src.data.yahoo_client._net import with_retry
+
+        info, fetch_error = with_retry(
+            lambda: ticker.info,
+            label=f"{symbol} の基本情報",
+            is_empty=lambda d: not d or d.get("regularMarketPrice") is None,
+        )
 
         if not info or info.get("regularMarketPrice") is None:
+            # **失敗を握り潰さない。** 呼び出し側が「データが無い」と誤読しないよう、
+            # 直近の失敗理由を記録しておく（`last_fetch_error()` で参照できる）。
+            _record_fetch_error(symbol, fetch_error or "価格が取得できませんでした")
             return None
 
         result = {

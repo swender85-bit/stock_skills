@@ -612,6 +612,67 @@ def _safe_external_views(holdings: list[dict]) -> dict:
                         "『発言が無かった』ではありません。"}
 
 
+#: 価格がこの比率を下回ったら、レポートを書かせずに再実行させる。
+#: 2026-08-08 は 10件中 9件が null（カバレッジ 10%）で、それでもレポートが
+#: 生成・保存された。**分析ではなく「取得できず」の一覧が届いた。**
+MIN_PRICE_COVERAGE = 0.7
+
+
+def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
+    """このパックでレポートを書いてよいかを判定する。
+
+    価格が取れていないパックからは、どれだけ丁寧に書いても
+    「取得できず」の一覧しか出てこない。**書く前に止める。**
+
+    Returns
+    -------
+    dict
+        {"price_coverage", "priced", "total", "missing", "usable", "verdict"}
+        `usable=False` のとき、呼び出し側は保存せず**再実行**すること。
+    """
+    rows = [h for h in holdings or [] if h.get("symbol") or h.get("name")]
+    total = len(rows)
+    priced = [h for h in rows if isinstance(h.get("price"), (int, float))]
+    missing = [str(h.get("symbol") or h.get("name")) for h in rows
+               if not isinstance(h.get("price"), (int, float))]
+    coverage = (len(priced) / total) if total else 0.0
+
+    # 取得失敗の理由を拾えるだけ拾う（「データが無い」との区別のため）
+    reasons: dict[str, str] = {}
+    try:
+        from src.data.yahoo_client.detail import last_fetch_error
+
+        for name in missing:
+            reason = last_fetch_error(name)
+            if reason:
+                reasons[name] = reason
+    except Exception:
+        pass
+
+    usable = coverage >= MIN_PRICE_COVERAGE
+    if usable:
+        verdict = f"価格カバレッジ {coverage:.0%}（{len(priced)}/{total}）。レポート生成可。"
+    else:
+        verdict = (
+            f"🔴 価格カバレッジ {coverage:.0%}（{len(priced)}/{total}）。"
+            f"**レポートを書ける状態ではありません。** 取得できなかった: {', '.join(missing)}。"
+            "これは『値動きが無かった』ではなく『取りに行けなかった』です。"
+        )
+        if network and network.get("ready") is False:
+            verdict += f" ネットワーク: {network.get('message')}"
+
+    return {
+        "price_coverage": round(coverage, 3),
+        "priced": len(priced),
+        "total": total,
+        "missing": missing,
+        "reasons": reasons,
+        "usable": usable,
+        "min_required": MIN_PRICE_COVERAGE,
+        "verdict": verdict,
+    }
+
+
 def _safe_primary_filings(holdings: list[dict]) -> dict:
     """開示原文（SEC EDGAR / EDINET）。**一次観測の唯一の供給源。**
 
@@ -702,6 +763,24 @@ def build_portfolio_briefing(
         config = load_holdings_config()
 
     _reset_timings()
+
+    # ⚠️ 取得を始める前にネットワークの復帰を待つ。
+    #
+    # 2026-08-08、PC がスタンバイから起こされた直後（WakeToRun）に実行が始まり、
+    # Wi-Fi の再接続が終わる前に価格取得が走った。最初の17秒が全滅し、
+    # リトライが無かったため**その一瞬の失敗が「今週の価格は取得不能」として確定**した。
+    # 135秒後の narrative は成功しており、通信は後から復旧していた。
+    #
+    # 「スタンバイのまま無人で動く」ことを前提にしている以上、
+    # 起床直後にネットワークが無い状態は**想定すべき通常状態**である。
+    with _timed("network_wait"):
+        try:
+            from src.data.yahoo_client._net import wait_for_network
+
+            network = wait_for_network()
+        except Exception as e:
+            network = {"ready": None, "message": f"疎通確認に失敗: {type(e).__name__}: {e}"}
+
     with _timed("prices_and_holdings"):
         base = build_report_data(
             config, rss_snapshot=rss_snapshot,
@@ -818,6 +897,10 @@ def build_portfolio_briefing(
             # 無人実行がタイムアウトしたとき、どこが遅かったかを後から追える
             "timings_sec": dict(_TIMINGS),
             "total_sec": round(sum(_TIMINGS.values()), 1),
+            # ネットワークの状態と、価格がどれだけ取れたか。
+            # **これが悪いパックからレポートを書かせない**ための判定材料。
+            "network": network,
+            "data_quality": _data_quality(holdings, network),
         },
         "reconciliation": reconciliation,
         "falsification": falsification,
@@ -865,6 +948,15 @@ def build_symbol_briefing(
 
     symbol = symbol.strip()
     today = date.today().isoformat()
+
+    # 個別問い合わせも週次と同じ保護をかける。
+    # **判断の質を質問の形式で変えない**（週次だけ守られている状態を作らない）。
+    try:
+        from src.data.yahoo_client._net import wait_for_network
+
+        network = wait_for_network()
+    except Exception as e:
+        network = {"ready": None, "message": f"疎通確認に失敗: {type(e).__name__}: {e}"}
 
     info = None
     detail = None
@@ -956,6 +1048,11 @@ def build_symbol_briefing(
             "as_of": today,
             "symbol": symbol,
             "is_held": held,
+            "network": network,
+            # 週次と同じ判定。価格が取れていないなら、それを明示して
+            # 「値動きが無かった」と読ませない。
+            "data_quality": _data_quality(
+                [{"symbol": symbol, "price": (info or {}).get("price")}], network),
         },
         "info": info,
         "fundamentals": {k: (detail or {}).get(k) for k in (

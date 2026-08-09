@@ -1411,6 +1411,15 @@ Thread-safe in-memory LRU cache with TTL.
 - `clear() -> None` — Drop all entries and reset stats.
 - `stats() -> dict` — Return hit/miss/size statistics.
 
+### src.data.yahoo_client._net
+
+繝阪ャ繝医Ρ繝ｼ繧ｯ貅門ｙ蠕�縺｡縺ｨ繝ｪ繝医Λ繧､ -- 蜿門ｾ励�ｮ荳譎ょ､ｱ謨励ｒ遒ｺ螳壹↓縺励↑縺�.
+
+- `network_available(timeout: float=3.0) -> bool` — 縺�縺ｾ繝阪ャ繝医Ρ繝ｼ繧ｯ縺ｫ蜃ｺ繧峨ｌ繧九°縲�
+- `wait_for_network(max_wait: Optional[float]=None, quiet: bool=False) -> dict` — 繝阪ャ繝医Ρ繝ｼ繧ｯ縺檎ｹ九′繧九∪縺ｧ蠕�縺､縲�
+- `is_transient(exc: BaseException) -> bool` — 蠕�縺ｦ縺ｰ逶ｴ繧句､ｱ謨励°縲�
+- `with_retry(fn: Callable[[], Any], *, label: str='', attempts: int=DEFAULT_ATTEMPTS, backoff: float=DEFAULT_BACKOFF_SEC, is_empty: Optional[Callable[[Any], bool]]=None, quiet: bool=False) -> tuple[Any, Optional[str]]` — 荳譎ょ､ｱ謨励ｒ繝ｪ繝医Λ繧､縺励※螳溯｡後☆繧九�
+
 ### src.data.yahoo_client._normalize
 
 Internal normalization and sanitization utilities (KIK-449).
@@ -1420,6 +1429,8 @@ Internal normalization and sanitization utilities (KIK-449).
 
 Stock info and detail fetching (KIK-449, KIK-531).
 
+- `last_fetch_error(symbol: str) -> Optional[str]` — 縺昴�ｮ驫俶氛縺ｮ逶ｴ霑代�ｮ蜿門ｾ怜､ｱ謨礼炊逕ｱ縲よ�仙粥縺励※縺�繧後�ｰ None縲�
+- `clear_fetch_errors() -> None`
 - `get_stock_info(symbol: str) -> Optional[dict]` — Fetch basic stock information for a single symbol.
 - `get_multiple_stocks(symbols: list[str]) -> dict[str, Optional[dict]]` — Fetch stock info for multiple symbols with a 1-second delay between requests.
 - `get_stock_detail(symbol: str) -> Optional[dict]` — Fetch detailed stock information including financial statements.
