@@ -821,6 +821,21 @@ def main() -> int:
                     help="価格が取れていないパックでも強制的にレポートを書く（非推奨）")
     args = ap.parse_args()
 
+    # 🔒 実行中はスリープへ戻らせない。
+    #
+    # 「PC はスタンバイで蓋を閉じたまま自動で出る」という前提で組んでいるのに、
+    # **実行中にスリープへ戻らない保証を一切していなかった。**
+    # システムログ実測では3時間ごとに起床して数秒で寝ており、
+    # 5〜10分かかる週次が途中で寝落ちすればネットワークが切れる
+    # （2026-08-08 の「前半全滅・後半成功」と同じ形になる）。
+    # 画面は点けないので、蓋を閉じたまま暗いまま動く。
+    from src.core.power import keep_awake
+
+    with keep_awake("週次レポート"):
+        return _run(args)
+
+
+def _run(args) -> int:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     day = date.today().strftime("%Y%m%d")
