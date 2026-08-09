@@ -689,6 +689,22 @@ def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
     }
 
 
+def _safe_composition_check() -> dict:
+    """投信の想定構成が、連動対象指数に追随しているかを実測する。
+
+    構成は運用会社の月次レポートにしか無く機械では確認できないが、
+    **「確認できない」と「検証できない」は違う。**
+    等ウェイトのバスケットが指数とどれだけ一致するかは測れる。
+    """
+    try:
+        from src.core.risk.composition_check import verify_configured_funds
+
+        return verify_configured_funds()
+    except Exception as e:
+        return {"_error": f"構成を検証できませんでした（{type(e).__name__}: {e}）。"
+                          "**『検証済み』ではありません。**"}
+
+
 def _safe_regime(base: dict, sleeve: Optional[dict],
                  constituents: Optional[dict]) -> dict:
     """市況レジーム（F&G・VIX・長期金利 × PFの状態）。
@@ -999,6 +1015,10 @@ def build_portfolio_briefing(
     with _timed("regime"):
         regime = _safe_regime(base, sleeve, constituents)
 
+    # 構成の自己検証。「未確認」を「精度が測定済み」に変える。
+    with _timed("composition_check"):
+        composition = _safe_composition_check()
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     with _timed("falsification"):
@@ -1074,6 +1094,8 @@ def build_portfolio_briefing(
         "leverage_sleeve": sleeve,
         # 市況レジーム（状態の記述。予測でも確率でもない）
         "regime": regime,
+        # 投信の想定構成が指数に追随しているかの実測（未確認→精度が測定済み）
+        "composition_check": composition,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),
