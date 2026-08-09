@@ -575,6 +575,14 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `fetch_peer_snapshot(symbol: str, client: Any=None) -> Optional[dict]` — 1縺､縺ｮ peer 縺ｮ逶ｴ霑代せ繝翫ャ繝励す繝ｧ繝�繝茨ｼ井ｾ｡譬ｼ繝ｻ騾ｱ髢馴ｨｰ關ｽ繝ｻ繝舌Μ繝･繧ｨ繝ｼ繧ｷ繝ｧ繝ｳ繝ｻ謌宣聞�ｼ峨�
 - `build_peer_context(symbols: list[str], client: Any=None, max_peers: int=5) -> dict[str, dict]` — 菫晄怏蜷�驫俶氛縺ｫ縺､縺�縺ｦ縲∫ｫｶ蜷医せ繝翫ャ繝励す繝ｧ繝�繝医�ｮ繝ｪ繧ｹ繝医ｒ邨�縺ｿ遶九※繧九�
 
+### src.core.research.constituent_intel
+
+讒区�宣釜譟�繧､繝ｳ繝�繝ｪ繧ｸ繧ｧ繝ｳ繧ｹ -- ETF縺ｮ荳ｭ霄ｫ繧偵悟錐蜑阪�ｮ荳隕ｧ縲阪〒邨ゅｏ繧峨○縺ｪ縺�.
+
+- `build_dossier(symbol: str, effective_pct: float=0.0, via: Optional[list[str]]=None, held_directly: bool=False, news_days: int=7, news_limit: int=3) -> dict` — 讒区�宣釜譟�1縺､蛻�縺ｮ蛻､譁ｭ譚先侭繧偵∪縺ｨ繧√ｋ縲�
+- `build_constituent_intel(lookthrough: Optional[dict], holdings: Optional[list[dict]]=None, top_n: int=DEFAULT_TOP_N, min_effective_pct: float=1.0) -> dict` — 螳溷柑繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ荳贋ｽ阪�ｮ讒区�宣釜譟�縺ｫ縺､縺�縺ｦ dossier 繧剃ｽ懊ｋ縲�
+- `format_constituent_intel(intel: Optional[dict], limit: int=12) -> str` — 繝ｬ繝昴�ｼ繝育畑縲�**豈皮紫縺ｮ荳隕ｧ縺ｧ邨ゅｏ繧峨○縺壹∝ｽ｢縺ｨ隕九←縺薙ｍ縺ｾ縺ｧ譖ｸ縺上�**
+
 ### src.core.research.narrative
 
 迚ｩ隱樣㍼繧ｹ繝翫ャ繝励す繝ｧ繝�繝� 窶� 繝�繝ｼ繧ｼ縺ｮ蟶悟ｰ第ｧ繧呈ｸｬ繧句悄蜿ｰ (蝨滓屆險ｭ險域嶌 謠先｡�7)縲�

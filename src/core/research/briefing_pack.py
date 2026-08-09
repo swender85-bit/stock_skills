@@ -673,6 +673,24 @@ def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
     }
 
 
+def _safe_constituent_intel(forward: Optional[dict],
+                            holdings: list[dict]) -> dict:
+    """ETF構成銘柄の判断材料（価格・過熱・決算日・ニュース・形）。
+
+    比率の一覧だけでは「だから何を見るべきか」に答えられない。
+    """
+    try:
+        from src.core.research.constituent_intel import build_constituent_intel
+
+        return build_constituent_intel(
+            (forward or {}).get("lookthrough"), holdings)
+    except Exception as e:
+        return {"available": False, "dossiers": [], "covered_pct": 0.0,
+                "signals": {}, "missing_news": [],
+                "note": f"構成銘柄を分析できませんでした（{type(e).__name__}: {e}）。"
+                        "**『中身が無い』ではありません。**"}
+
+
 def _safe_forward_horizon(holdings: list[dict], forward: Optional[dict]) -> dict:
     """数ヶ月先の決算・配当カレンダー（実効エクスポージャー付き）。
 
@@ -868,6 +886,12 @@ def build_portfolio_briefing(
     with _timed("forward_horizon"):
         horizon = _safe_forward_horizon(holdings, forward)
 
+    # 構成銘柄インテリジェンス。
+    # 「NVDA が実効20%」だけでは判断に使えない。価格・過熱・決算日・ニュースを
+    # 束ねて、**単独指標では見えない形**（週次プラス×月次マイナス＝戻り 等）を出す。
+    with _timed("constituent_intel"):
+        constituents = _safe_constituent_intel(forward, holdings)
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     with _timed("falsification"):
@@ -937,6 +961,8 @@ def build_portfolio_briefing(
         "primary_filings": primary_filings,
         # 数ヶ月先の決算・配当（保有＋ETF構成銘柄・実効エクスポージャー付き）
         "forward_horizon": horizon,
+        # ETF構成銘柄の判断材料（価格・過熱・決算日・ニュース・共通する形）
+        "constituents": constituents,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),
