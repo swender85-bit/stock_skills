@@ -216,15 +216,31 @@ def _proxy_technicals(symbol: Optional[str], name: Optional[str]) -> Optional[di
         from src.core.technicals import analyze_prices
         from src.data import yahoo_client as yc
 
-        hist = yc.get_price_history(px["proxy"], period="2y")
-        closes = [float(x) for x in hist["Close"].dropna().tolist()] if hist is not None else []
+        # 指数 → 予備の順に試す。指数が引けなかった週に「判定不能」で
+        # 終わらせないため（§16-8 単一の取得元に依存しない）。
+        used = None
+        closes: list[float] = []
+        for candidate in (px["proxy"], px.get("fallback")):
+            if not candidate:
+                continue
+            hist = yc.get_price_history(candidate, period="2y")
+            if hist is not None and not hist.empty:
+                closes = [float(x) for x in hist["Close"].dropna().tolist()]
+                if closes:
+                    used = candidate
+                    break
         if not closes:
             return None
         t = _compact_technicals(analyze_prices(closes))
         if t:
-            t["proxy_symbol"] = px["proxy"]
+            t["proxy_symbol"] = used
             t["is_proxy"] = True
             t["proxy_note"] = px.get("note")
+            if used != px["proxy"]:
+                t["proxy_fallback_used"] = True
+                t["proxy_note"] = (
+                    f"{px.get('note') or ''} ⚠️ 本来の代理（{px['proxy']}）が"
+                    f"取得できず予備（{used}）を使用。")
         return t
     except Exception:
         return None
@@ -673,6 +689,50 @@ def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
     }
 
 
+def _safe_regime(base: dict, sleeve: Optional[dict],
+                 constituents: Optional[dict]) -> dict:
+    """市況レジーム（F&G・VIX・長期金利 × PFの状態）。
+
+    統計レンジ「1ヶ月で ▲22%〜+30%」だけでは判断に使えない。
+    いま上下どちらに傾いているかは、既にある材料から言える。
+    """
+    try:
+        from src.core.market_dashboard import (
+            compute_fear_greed,
+            get_vix_history,
+            get_yield_curve,
+        )
+        from src.core.risk.regime import assess_regime
+
+        fg = vix = ust30y = None
+        try:
+            fg = (compute_fear_greed() or {}).get("score")
+        except Exception:
+            pass
+        try:
+            vix = (get_vix_history() or {}).get("current")
+        except Exception:
+            pass
+        try:
+            ust30y = ((get_yield_curve() or {}).get("yields") or {}).get("30Y")
+        except Exception:
+            pass
+
+        total = base.get("total_jpy") or 0.0
+        cash = base.get("cash_jpy") or 0.0
+        return assess_regime(
+            fear_greed=fg, vix=vix, ust30y=ust30y,
+            effective_leverage=(sleeve or {}).get("effective_leverage"),
+            cash_ratio=(cash / total) if total else None,
+            constituent_signals=(constituents or {}).get("signals"),
+        )
+    except Exception as e:
+        return {"axes": [], "available_axes": 0, "total_axes": 0,
+                "tilt": "判定不能", "tilt_note": "", "cautions": [],
+                "note": f"レジームを判定できませんでした（{type(e).__name__}: {e}）。"
+                        "**『中立』ではありません。**"}
+
+
 def _safe_leverage_sleeve(holdings: list[dict], forward: Optional[dict],
                           total_jpy: Optional[float]) -> dict:
     """3xスリーブの実体（重複・ドラッグ・単一銘柄感応度）。
@@ -726,18 +786,37 @@ def _safe_forward_horizon(holdings: list[dict], forward: Optional[dict]) -> dict
                         "**『予定なし』ではありません。**"}
 
 
-def _safe_primary_filings(holdings: list[dict]) -> dict:
+#: 一次観測を取りに行く構成銘柄の実効エクスポージャー下限。
+#: **ETF経由の曝露が大きい銘柄の開示は、直接保有と同じくらい重要。**
+#: NVDA は直接保有ゼロだが実効20%で、その 8-K は PF の2割に効く。
+PRIMARY_CONSTITUENT_MIN_PCT = 5.0
+
+
+def _safe_primary_filings(holdings: list[dict],
+                          forward: Optional[dict] = None) -> dict:
     """開示原文（SEC EDGAR / EDINET）。**一次観測の唯一の供給源。**
 
     これが空の週は、レポートの全ての解釈が外部言説（深度1）と自己推論の上に
     立っていることになる。取得できなかったことを黙って落とさない。
+
+    **直接保有だけでなく、ETF経由で曝露の大きい構成銘柄も対象にする。**
+    NVDA は直接保有ゼロだが実効20%（PFの5分の1）で、その開示は
+    どの直接保有よりも PF に効く。保有リストだけ見ていると取りこぼす。
     """
     try:
         from src.core.primary_source import build_primary_section, source_status
 
         symbols = [h.get("symbol") for h in holdings or [] if h.get("symbol")]
-        section = build_primary_section(symbols, days=30, limit_per_symbol=5)
+        via_etf = [
+            r["symbol"] for r in ((forward or {}).get("lookthrough") or {}).get(
+                "effective") or []
+            if (r.get("effective_pct") or 0) >= PRIMARY_CONSTITUENT_MIN_PCT
+            and r.get("symbol") and r["symbol"] not in symbols
+        ]
+        section = build_primary_section(symbols + via_etf, days=45,
+                                        limit_per_symbol=3)
         section["source_status"] = source_status()
+        section["constituent_symbols"] = via_etf
         return section
     except Exception as e:
         return {"available": False, "by_symbol": {}, "claims": [],
@@ -895,7 +974,7 @@ def build_portfolio_briefing(
     # 一次観測（開示原文）。**系譜台帳で唯一 深度0 の錨になる材料。**
     # これが空の週の解釈は、全て外部言説と自己推論の上に立っている。
     with _timed("primary_filings"):
-        primary_filings = _safe_primary_filings(holdings)
+        primary_filings = _safe_primary_filings(holdings, forward)
 
     # 前方カレンダー（数ヶ月先）。
     # 「翌週ゼロ」と「3ヶ月ゼロ」はまったく違う。翌週だけを見ていると、
@@ -914,6 +993,11 @@ def build_portfolio_briefing(
     # 重複・ボラドラッグ・単一銘柄感応度を金額で出す。
     with _timed("leverage_sleeve"):
         sleeve = _safe_leverage_sleeve(holdings, forward, base.get("total_jpy"))
+
+    # 市況レジーム。「±22%」という統計レンジを判断に使える形にする。
+    # **状態の記述であって予測ではない。確率も出さない。**
+    with _timed("regime"):
+        regime = _safe_regime(base, sleeve, constituents)
 
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
@@ -988,6 +1072,8 @@ def build_portfolio_briefing(
         "constituents": constituents,
         # 3xスリーブの実体（重複・ボラドラッグ・単一銘柄感応度）
         "leverage_sleeve": sleeve,
+        # 市況レジーム（状態の記述。予測でも確率でもない）
+        "regime": regime,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),

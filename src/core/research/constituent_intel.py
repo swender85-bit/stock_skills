@@ -177,6 +177,11 @@ def build_dossier(
     except Exception:
         row["missing"].append("決算日")
 
+    # 今後の見通し（アナリスト目標）。**外部言説（深度1）であり予言ではない。**
+    row["outlook"] = _outlook_for(symbol, row.get("price"))
+    if not row["outlook"].get("available"):
+        row["missing"].append("アナリスト目標")
+
     # ニュース（外部言説・深度1）
     row["news"] = _news_for(symbol, news_days, news_limit)
     if not row["news"]:
@@ -185,6 +190,57 @@ def build_dossier(
     row["signals"] = _classify(row.get("week_change_pct"), row.get("month_change_pct"),
                                row.get("rsi14"), row.get("sma200_deviation_pct"))
     return row
+
+
+def _outlook_for(symbol: str, price: Optional[float]) -> dict:
+    """アナリストの目標株価から見た上値余地。
+
+    ⚠️ **これは予言ではなく「他人がそう言っている」という外部言説（深度1）。**
+    的中率は測っていない。レポートでは必ずその旨を添える。
+
+    それでも載せる理由: 「この銘柄は今後どうなるか」に対して、
+    **市場参加者の期待水準がどこにあるか**は判断の材料になる。
+    現在値が目標を大きく超えていれば、期待は既に織り込まれている。
+    """
+    out: dict[str, Any] = {"available": False,
+                           "note": "アナリスト目標を取得できませんでした。"
+                                   "**『目標が無い』ではありません。**"}
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(symbol).info or {}
+    except Exception:
+        return out
+
+    mean = info.get("targetMeanPrice")
+    high = info.get("targetHighPrice")
+    low = info.get("targetLowPrice")
+    n = info.get("numberOfAnalystOpinions")
+    rec = info.get("recommendationKey")
+
+    if not isinstance(mean, (int, float)) or not price:
+        return out
+
+    upside = (mean / price - 1.0) * 100.0
+    out = {
+        "available": True,
+        "target_mean": mean,
+        "target_high": high,
+        "target_low": low,
+        "analysts": n,
+        "recommendation": rec,
+        "upside_pct": round(upside, 1),
+        "provenance": "external_discourse",
+        "note": (
+            f"アナリスト{n or '?'}名の平均目標 {mean:,.2f}（現在値比 {upside:+.1f}%）。"
+            "**外部言説であり予言ではない。的中率は測っていない。**"
+        ),
+    }
+    if upside < 0:
+        out["signal"] = "現在値が平均目標を上回っている（期待は織り込み済み）"
+    elif upside > 25:
+        out["signal"] = "平均目標まで25%超の余地（ただし目標は下方修正されうる）"
+    return out
 
 
 def _news_for(symbol: str, days: int, limit: int) -> list[dict]:
@@ -302,8 +358,8 @@ def format_constituent_intel(intel: Optional[dict], limit: int = 12) -> str:
     lines = [
         "### 構成銘柄の分析（実効エクスポージャー上位）",
         "",
-        "| 銘柄 | 実効% | 週 | 月 | RSI | 200d乖離 | PER | 次回決算 | 形 |",
-        "|:---|---:|---:|---:|---:|---:|---:|:---|:---|",
+        "| 銘柄 | 実効% | 週 | 月 | RSI | 200d乖離 | PER | 次回決算 | 目標乖離 | 形 |",
+        "|:---|---:|---:|---:|---:|---:|---:|:---|---:|:---|",
     ]
     for d in intel["dossiers"][:limit]:
         def f(v, suffix="", digits=1):
@@ -313,11 +369,16 @@ def format_constituent_intel(intel: Optional[dict], limit: int = 12) -> str:
         if d.get("days_to_earnings") is not None:
             earn += f"({d['days_to_earnings']}日)"
         shape = "／".join(s.split("（")[0] for s in d["signals"]) or "—"
+        outlook = d.get("outlook") or {}
+        up = (f"{outlook['upside_pct']:+.0f}%" if outlook.get("available") else "—")
         lines.append(
             f"| {d['symbol']} | {d['effective_pct']:.2f}% "
             f"| {f(d.get('week_change_pct'), '%')} | {f(d.get('month_change_pct'), '%')} "
             f"| {d.get('rsi14', 0) or 0:.0f} | {f(d.get('sma200_deviation_pct'), '%', 0)} "
-            f"| {d.get('per') or '—'} | {earn} | {shape} |")
+            f"| {d.get('per') or '—'} | {earn} | {up} | {shape} |")
+
+    lines += ["", "※ 目標乖離＝アナリスト平均目標と現在値の差。"
+                  "**外部言説（深度1）であり予言ではない。的中率は測っていない。**"]
 
     if intel.get("signals"):
         lines += ["", "**共通して現れている形:**", ""]

@@ -129,7 +129,11 @@ def resolve_technical_proxy(symbol: Optional[str], name: Optional[str] = None,
         if str(key).strip() and str(key).strip() in str(name or ""):
             proxy = str(e.get("proxy") or "").strip()
             if proxy:
-                return {"proxy": proxy, "note": e.get("note"),
+                return {"proxy": proxy,
+                        # §16-8: 単一の取得元に依存しない。指数が引けなかった週に
+                        # 「判定不能」で終わらせないための予備。
+                        "fallback": str(e.get("fallback") or "").strip() or None,
+                        "note": e.get("note"),
                         "matched": key, "approximate": True}
     return None
 
