@@ -172,8 +172,48 @@ def test_news_is_marked_as_external_discourse(monkeypatch):
     assert got[0]["provenance"] == "external_discourse"
 
 
-def test_news_unavailable_returns_empty(monkeypatch):
+def test_falls_back_to_yfinance_when_finnhub_unavailable(monkeypatch):
+    """**finnhub だけを見ない。** §16-8 単一の取得元に依存しない。
+
+    finnhub のフリー枠は日本株のニュースに対応せず、味の素・ニトリが
+    常に「取得できませんでした」になっていた。実際には yfinance で取れる。
+    """
+    import yfinance as yf
+
     import src.data.finnhub_client as fh
 
     monkeypatch.setattr(fh, "is_available", lambda: False)
+
+    class FakeTicker:
+        news = [{"content": {"title": "味の素 決算", "canonicalUrl": {"url": "u"},
+                             "pubDate": "2026-08-08"}}]
+
+    monkeypatch.setattr(yf, "Ticker", lambda *a, **k: FakeTicker())
+    got = CI._news_for("2802.T", 7, 3)
+    assert got and got[0]["headline"] == "味の素 決算"
+    assert got[0]["source_api"] == "yfinance"
+    assert got[0]["provenance"] == "external_discourse"
+
+
+def test_news_empty_when_both_sources_fail(monkeypatch):
+    import yfinance as yf
+
+    import src.data.finnhub_client as fh
+
+    monkeypatch.setattr(fh, "is_available", lambda: False)
+
+    class Dead:
+        news: list = []
+
+    monkeypatch.setattr(yf, "Ticker", lambda *a, **k: Dead())
     assert CI._news_for("NVDA", 7, 3) == []
+
+
+def test_finnhub_takes_precedence(monkeypatch):
+    import src.data.finnhub_client as fh
+
+    monkeypatch.setattr(fh, "is_available", lambda: True)
+    monkeypatch.setattr(fh, "get_company_news",
+                        lambda s, days=7, limit=5: [{"headline": "from finnhub"}])
+    got = CI._news_for("NVDA", 7, 3)
+    assert got[0]["source_api"] == "finnhub"

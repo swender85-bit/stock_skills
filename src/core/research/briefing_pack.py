@@ -673,6 +673,23 @@ def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
     }
 
 
+def _safe_leverage_sleeve(holdings: list[dict], forward: Optional[dict],
+                          total_jpy: Optional[float]) -> dict:
+    """3xスリーブの実体（重複・ドラッグ・単一銘柄感応度）。
+
+    保有比率で並べると3つの独立資産に見えるが、同じ銘柄を持っている。
+    「3本＝分散」ではない。
+    """
+    try:
+        from src.core.risk.leverage_sleeve import analyze_sleeve
+
+        return analyze_sleeve(holdings, (forward or {}).get("lookthrough"), total_jpy)
+    except Exception as e:
+        return {"available": False, "etfs": [], "overlap": {}, "sensitivity": [],
+                "note": f"レバレッジ・スリーブを分析できませんでした"
+                        f"（{type(e).__name__}: {e}）。"}
+
+
 def _safe_constituent_intel(forward: Optional[dict],
                             holdings: list[dict]) -> dict:
     """ETF構成銘柄の判断材料（価格・過熱・決算日・ニュース・形）。
@@ -892,6 +909,12 @@ def build_portfolio_briefing(
     with _timed("constituent_intel"):
         constituents = _safe_constituent_intel(forward, holdings)
 
+    # レバレッジ・スリーブの実体。
+    # SOXL/TECL/TQQQ は「3つのポジション」ではなく**重み違いの同一ポジション**。
+    # 重複・ボラドラッグ・単一銘柄感応度を金額で出す。
+    with _timed("leverage_sleeve"):
+        sleeve = _safe_leverage_sleeve(holdings, forward, base.get("total_jpy"))
+
     # 信念の点検と前週差分。差分は「今週のパック」の形に依存するので、
     # holdings / portfolio が確定した後に計算する。
     with _timed("falsification"):
@@ -963,6 +986,8 @@ def build_portfolio_briefing(
         "forward_horizon": horizon,
         # ETF構成銘柄の判断材料（価格・過熱・決算日・ニュース・共通する形）
         "constituents": constituents,
+        # 3xスリーブの実体（重複・ボラドラッグ・単一銘柄感応度）
+        "leverage_sleeve": sleeve,
         "execution_audit": execution_audit,
         "model_audit": model_audit,
         "week_diff": diff_bundle.get("diff"),

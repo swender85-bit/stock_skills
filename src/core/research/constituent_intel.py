@@ -188,17 +188,48 @@ def build_dossier(
 
 
 def _news_for(symbol: str, days: int, limit: int) -> list[dict]:
-    """ニュース。**一次観測ではなく外部言説（深度1）。**"""
+    """ニュース。**一次観測ではなく外部言説（深度1）。**
+
+    ⚠️ **finnhub だけを見ない。** finnhub のフリー枠は日本株のニュースに対応せず、
+    味の素・ニトリが常に「取得できませんでした」になっていた。実際には
+    yfinance 経由で 2802.T は10件、9843.T は3件取れる。
+    §16-8「単一の取得元に依存しない」の違反そのものだった。
+    """
+    out: list[dict] = []
+
     try:
         from src.data import finnhub_client
 
-        if not finnhub_client.is_available():
-            return []
-        return [{**a, "provenance": "external_discourse"}
-                for a in (finnhub_client.get_company_news(
-                    symbol, days=days, limit=limit) or [])]
+        if finnhub_client.is_available():
+            out = [{**a, "provenance": "external_discourse", "source_api": "finnhub"}
+                   for a in (finnhub_client.get_company_news(
+                       symbol, days=days, limit=limit) or [])]
     except Exception:
-        return []
+        pass
+    if out:
+        return out
+
+    # yfinance へフォールバック（日本株はこちらでしか取れない）
+    try:
+        import yfinance as yf
+
+        for raw in (yf.Ticker(symbol).news or [])[:limit]:
+            content = raw.get("content") or raw
+            title = content.get("title") or content.get("headline")
+            if not title:
+                continue
+            out.append({
+                "headline": str(title),
+                "url": ((content.get("canonicalUrl") or {}).get("url")
+                        if isinstance(content.get("canonicalUrl"), dict)
+                        else content.get("link")) or "",
+                "datetime": content.get("pubDate") or content.get("providerPublishTime"),
+                "provenance": "external_discourse",
+                "source_api": "yfinance",
+            })
+    except Exception:
+        pass
+    return out
 
 
 def build_constituent_intel(

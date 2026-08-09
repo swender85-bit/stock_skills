@@ -655,6 +655,14 @@ Correlation analysis and VaR computation for portfolio stress testing (KIK-352).
 - `build_forward_horizon(holdings: list[dict], lookthrough: Optional[dict]=None, *, as_of: Optional[date]=None, horizon_days: int=DEFAULT_HORIZON_DAYS, events_by_symbol: Optional[dict]=None, min_effective_pct: float=0.5) -> dict` — 菫晄怏�ｼ畿TF讒区�宣釜譟�縺ｮ豎ｺ邂励�ｻ驟榊ｽ薙ｒ縲∵焚繝ｶ譛亥�医∪縺ｧ荳ｦ縺ｹ繧九�
 - `format_horizon(horizon: Optional[dict], limit: int=25) -> str` — 繝ｬ繝昴�ｼ繝育畑縺ｮ陦ｨ縲�**螳溷柑%莉倥″**縺ｧ縲後＞縺､菴�%縺碁夐℃縺吶ｋ縺九阪ｒ隕九○繧九�
 
+### src.core.risk.leverage_sleeve
+
+3x繧ｹ繝ｪ繝ｼ繝悶�ｮ螳滉ｽ灘��譫� -- 3譛ｬ縺ｮETF繧偵�3縺､縺ｮ繝昴ず繧ｷ繝ｧ繝ｳ縲阪→謨ｰ縺医↑縺�.
+
+- `volatility_drag(leverage: float, sigma: float) -> float` — 繝懊Λ繝�繧｣繝ｪ繝�繧｣繝ｻ繝峨Λ繝�繧ｰ�ｼ亥ｹｴ邇�繝ｻ蟆乗焚�ｼ峨�
+- `analyze_sleeve(holdings: list[dict], lookthrough: Optional[dict]=None, total_jpy: Optional[float]=None) -> dict` — 繝ｬ繝舌Ξ繝�繧ｸ繝ｻ繧ｹ繝ｪ繝ｼ繝悶�ｮ螳滉ｽ薙ｒ蜃ｺ縺吶�
+- `format_sleeve(sleeve: Optional[dict]) -> str` — 繝ｬ繝昴�ｼ繝育畑縲�
+
 ### src.core.risk.scenario_analysis
 
 Scenario-based causal chain analysis for portfolio stress testing (KIK-341).
