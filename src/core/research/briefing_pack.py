@@ -1246,6 +1246,23 @@ def build_symbol_briefing(
     falsification = _safe_falsification([holding_row])
     primary_filings = _safe_primary_filings([{"symbol": symbol}])
     external_views = _safe_external_views([{"symbol": symbol}])
+
+    # 個別でも週次と同じ層を通す。**質問の形式で判断の質を変えない。**
+    #
+    # ETF・投信なら、その銘柄の中身（構成銘柄）まで開けないと分析にならない。
+    # 「SOXL ってどう？」に価格とRSIだけ返すのは、中身を見ずに答えているのと同じ。
+    # 単一銘柄の分析では「その銘柄が100%」として中身と感応度を見る。
+    # 実際の保有額ではなく比率で語るので、金額は入れない（誤読を招く）。
+    sleeve_row = {**holding_row, "weight_pct": 100.0, "value_jpy": 100.0}
+    symbol_lookthrough = _safe_symbol_lookthrough(holding_row)
+    symbol_constituents = _safe_constituent_intel(
+        {"lookthrough": symbol_lookthrough}, [holding_row])
+    symbol_horizon = _safe_forward_horizon(
+        [sleeve_row], {"lookthrough": symbol_lookthrough})
+    symbol_sleeve = _safe_leverage_sleeve(
+        [sleeve_row], {"lookthrough": symbol_lookthrough}, 100.0)
+    symbol_regime = _safe_regime(
+        {"total_jpy": None, "cash_jpy": None}, symbol_sleeve, symbol_constituents)
     # 前提の衝突（改善4）は PF 全体の話だが、**個別判断にこそ効く**:
     # 「この銘柄のテーゼは円安継続が前提。だが円高を待つ計画がある」は、
     # その銘柄を買う/持ち続ける判断に直接ぶつかる。
@@ -1300,7 +1317,38 @@ def build_symbol_briefing(
         "forward": symbol_forward,
         # 前提の衝突（この銘柄のテーゼが、待っている計画と食い違っていないか）
         "assumption_space": assumption_space,
+        # ETF/投信なら中身まで開ける。価格とRSIだけで答えない。
+        "lookthrough": symbol_lookthrough,
+        "constituents": symbol_constituents,
+        # 数ヶ月先の日程（翌週だけ見て「予定なし」と書かない）
+        "forward_horizon": symbol_horizon,
+        # レバレッジ商品ならドラッグと重複
+        "leverage_sleeve": symbol_sleeve,
+        # 市況レジーム（状態の記述。予測ではない）
+        "regime": symbol_regime,
     }
+
+
+def _safe_symbol_lookthrough(holding: dict) -> dict:
+    """この銘柄が ETF/投信なら中身を展開する。個別株なら空。
+
+    「SOXL ってどう？」に価格とRSIだけ返すのは、**中身を見ずに答えている**のと同じ。
+    """
+    try:
+        from src.core.risk.etf_lookthrough import build_lookthrough
+
+        row = dict(holding)
+        # ⚠️ `setdefault` は None を置き換えない。holding_row は weight_pct を
+        # 明示的に None にしているので、それだと展開が丸ごと空になる（実際なった）。
+        # 単一銘柄の分析では「その銘柄が100%」として中身を見る。
+        if not row.get("weight_pct"):
+            row["weight_pct"] = 100.0
+        return build_lookthrough([row])
+    except Exception as e:
+        return {"available": False, "effective": [], "resolved_etfs": [],
+                "unresolved": [],
+                "note": f"中身を展開できませんでした（{type(e).__name__}）。"
+                        "**『中身が無い』ではありません。**"}
 
 
 def _safe_assumption_space_for(symbol: str) -> dict:
