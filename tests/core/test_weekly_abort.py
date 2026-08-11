@@ -126,3 +126,72 @@ class TestHeaderDisclosure:
         assert "のみ評価" not in header
         assert "75.7%" in header
         assert "損益率は非表示" not in header
+
+
+class _Args:
+    """`_run` に渡す引数。argparse の既定値と同じ形にする。"""
+
+    def __init__(self, out_dir, **kw):
+        self.pack = None
+        self.out_dir = str(out_dir)
+        self.model = "opus"
+        self.timeout = 900
+        self.max_sections = 0
+        self.max_attempts = 2
+        self.restart = False
+        self.resume_within_days = 3
+        self.resume_only = False
+        self.dry_run = True
+        self.no_moomoo = True
+        self.no_critics = True
+        self.critic_days = 7
+        self.force_low_quality = False
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+
+class TestAbortLeavesResumableState:
+    """H5 — 打ち切ったまま誰も気づかない、を再発させない。"""
+
+    def _low_quality_pack(self, tmp_path):
+        pack = {
+            "meta": {"as_of": "2026-08-08",
+                     "network": {"ready": False, "message": "未接続"},
+                     "data_quality": dict(LOW_QUALITY)},
+            "portfolio": {"price_failures": []},
+            "holdings": [],
+        }
+        p = tmp_path / "PF_low.json"
+        p.write_text(__import__("json").dumps(pack, ensure_ascii=False), encoding="utf-8")
+        return p
+
+    def test_state_is_saved_before_returning(self, tmp_path, monkeypatch):
+        pack_path = self._low_quality_pack(tmp_path)
+        monkeypatch.setattr(driver, "ensure_pack", lambda *a, **k: pack_path)
+
+        code = driver._run(_Args(tmp_path))
+
+        assert code == driver.EXIT_INTERRUPTED
+        states = list(tmp_path.glob("state_*.json"))
+        assert states, "打ち切ったのに state が残っていない（再開タスクが拾えない）"
+        saved = __import__("json").loads(states[0].read_text(encoding="utf-8"))
+        assert saved["aborted_low_quality"] is True
+        assert saved["finished"] is False
+
+    def test_resume_only_picks_up_the_abort(self, tmp_path, monkeypatch):
+        """--resume-only が『何もしません』で終わらないこと。"""
+        pack_path = self._low_quality_pack(tmp_path)
+        monkeypatch.setattr(driver, "ensure_pack", lambda *a, **k: pack_path)
+        driver._run(_Args(tmp_path))
+
+        calls = []
+
+        def _ensure(*a, **k):
+            calls.append(1)
+            return pack_path
+
+        monkeypatch.setattr(driver, "ensure_pack", _ensure)
+        code = driver._run(_Args(tmp_path, resume_only=True))
+
+        assert calls, "--resume-only がパックを作り直していない（打ち切りが放置される）"
+        assert code == driver.EXIT_INTERRUPTED

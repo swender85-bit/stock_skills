@@ -770,7 +770,10 @@ def build_header(pack: dict) -> str:
         f"（うち現金 ¥{_fmt(pf.get('cash_jpy'))}）"
         f"{(pf.get('coverage') or {}).get('note') or ''}",
         # 損益率は分子と分母の母集団が一致するときだけ出る（混合分母の抑制）。
+        # 金額のほうにも母数を必ず添える。**抑制した比率の隣に、母数のない
+        # 合計が並ぶのは同じ誤読を招く。**
         f"- 評価損益: ¥{_fmt(pf.get('total_pl_jpy'))}"
+        f"{(pf.get('pl_coverage') or {}).get('note') or ''}"
         + (f"（{_fmt(pf.get('pl_pct'), '%', 1)}）" if not pf.get("pl_pct_suppressed")
            else f" ⚠️ 損益率は非表示: {pf.get('pl_pct_suppressed_reason')}"),
         f"- 為替: {_fmt(meta.get('fx_rate'), ' 円/USD', 2)}",
