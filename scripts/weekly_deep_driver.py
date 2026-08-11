@@ -85,6 +85,31 @@ def _slim_holding(h: dict) -> dict:
     )}
 
 
+#: 過熱の判定に要る中身の項目だけ。**ニュース本文は落とす**（別の節の材料）。
+_CONSTITUENT_HEAT_KEYS = (
+    "symbol", "name", "effective_pct", "via", "held_directly",
+    "week_change_pct", "month_change_pct", "quarter_change_pct",
+    "rsi14", "sma200_deviation_pct", "range_52w_position", "from_high_pct",
+    "volatility_pct", "next_earnings", "days_to_earnings", "signals",
+)
+
+
+def _slim_constituents(data: Optional[dict]) -> Optional[dict]:
+    """構成銘柄を過熱判定に要る項目だけに絞る。
+
+    全 dossier をそのまま渡すと1節で3万字を超える。落とすのはニュース本文と
+    ファンダの明細で、**取得できたかどうか（`available` / `covered_pct` /
+    `missing_news`）は必ず残す** — 縮めたことが「材料が無かった」に化けないため。
+    """
+    if not isinstance(data, dict):
+        return data
+    out = {k: v for k, v in data.items() if k != "dossiers"}
+    out["dossiers"] = [{k: d.get(k) for k in _CONSTITUENT_HEAT_KEYS if k in d}
+                       for d in data.get("dossiers") or []]
+    out["slimmed"] = "ニュース本文とファンダ明細は他節の材料のため省略"
+    return out
+
+
 def _sum(rows: list[dict], key: str) -> Optional[float]:
     vals = [r.get(key) for r in rows if isinstance(r.get(key), (int, float))]
     return sum(vals) if vals else None
@@ -138,11 +163,19 @@ def slice_pack(pack: dict, section: dict) -> dict:
     # --- 土曜設計書 第3章 の固定骨格 ---
 
     if kind == "verdict":
+        # 判定は本文を全部書いた後に書くが、**仕様 §0 は本文に無い材料も要求する**:
+        # 監視対象（`watch_plan`）とレジーム（`regime`）である。
+        # ⚠️ この2つが欠けていたため、仕様の 🔴 指示が両方とも空振りしていた。
+        # 「ETF経由の曝露を保有と並べるな」「レジームを判定の直後に置け」は、
+        # 材料が届いて初めて守れる。
         return {**meta,
                 "week_diff": pack.get("week_diff"),
                 "cumulative_diff": pack.get("cumulative_diff"),
                 "reconciliation": pack.get("reconciliation"),
                 "falsification": pack.get("falsification"),
+                "watch_plan": pack.get("watch_plan"),
+                "regime": pack.get("regime"),
+                "indices": pack.get("indices"),
                 "forward_actionable": (pack.get("forward") or {}).get("actionable")}
 
     if kind == "reconcile":
@@ -160,6 +193,12 @@ def slice_pack(pack: dict, section: dict) -> dict:
         ext = pack.get("external_views") or {}
         return {**meta,
                 "forward": pack.get("forward"),
+                # 仕様 §3 は `forward_horizon`（数ヶ月先）と `constituents`
+                # （中身の企業の決算）を「必ず書け」と指示している。
+                # ⚠️ ここに渡していなかったため、その指示は**届いていなかった**。
+                # パックに入れただけでは節には届かない。
+                "forward_horizon": pack.get("forward_horizon"),
+                "constituents": pack.get("constituents"),
                 "moomoo": pack.get("moomoo"),
                 "indices": pack.get("indices"),
                 # マクロ系の外部見解だけ渡す（改善5）。銘柄別は holding 節へ。
@@ -191,6 +230,9 @@ def slice_pack(pack: dict, section: dict) -> dict:
                     (pack.get("week_diff") or {}).get("folded") or [])},
                 "execution_audit": pack.get("execution_audit"),
                 "model_audit": pack.get("model_audit"),
+                # 投信の構成が指数と整合しているかの自己検証。**模型の健全性**なので
+                # 監査節の材料。これも今までどの節にも渡っていなかった。
+                "composition_check": pack.get("composition_check"),
                 "prior_context": pack.get("prior_context")}
 
     # --- 機会セクション（銘柄別・過熱）は従来のスライスを流用 ---
@@ -248,7 +290,32 @@ def slice_pack(pack: dict, section: dict) -> dict:
                      "weight_pct": h.get("weight_pct"), "pl_jpy": h.get("pl_jpy"),
                      "pl_pct": h.get("pl_pct"), "technicals": h.get("technicals")}
                     for h in pack.get("holdings") or []],
+                # 仕様 §5 の「レバレッジ・スリーブの実体を必ず書く」に必要。
+                # **ETF の過熱は、中身の過熱である。** ETF 単体の RSI が中立でも
+                # 中身が過熱していることがあるので、両方を同じ皿に載せる。
+                "leverage_sleeve": pack.get("leverage_sleeve"),
+                "constituents": _slim_constituents(pack.get("constituents")),
                 "indices": pack.get("indices")}
+
+    if kind == "outlook":
+        # 短期(1ヶ月)/中期(3ヶ月)/長期(半年以降)の見通しを書く節。
+        # **ここまでの材料を全部使う節なので、渡す材料も一番広い。**
+        # 数字（projection）だけ渡すと「レンジを転記しただけ」の節になるため、
+        # 何がそのレンジを決めるか（中身の決算・レジーム・ドラッグ）を必ず添える。
+        return {**meta,
+                "projection": pack.get("projection"),
+                "vol_calibration": pack.get("vol_calibration"),
+                "positions_assumptions": pack.get("positions_assumptions"),
+                "scenarios": pack.get("scenarios"),
+                "regime": pack.get("regime"),
+                "leverage_sleeve": pack.get("leverage_sleeve"),
+                "forward_horizon": pack.get("forward_horizon"),
+                # 見通しに要るのは「どの決算がいつ来るか」と signal の分布であって
+                # ニュース本文ではない（それは §3 と銘柄別節が扱う）。
+                "constituents": _slim_constituents(pack.get("constituents")),
+                "monthly_contribution": pack.get("monthly_contribution"),
+                "holdings_overview": [_slim_holding(h)
+                                      for h in pack.get("holdings") or []]}
 
     if kind == "cumulative":
         return {**meta,
@@ -375,7 +442,7 @@ def build_sections(pack: dict) -> list[dict]:
                          "何をするか』の材料（第0原則: 土曜は買う銘柄を答える日ではない）。"),
             })
         sections.append({
-            "id": "heat", "kind": "heat", "order": 79,
+            "id": "heat", "kind": "heat", "order": 78,
             "heading": "### 過熱 / 売られすぎ 横断ビュー",
             "spec": ("仕様の「### 5. 機会」末尾の横断ビューに従って書く。"
                      "多数決で判定し、算出できる指標が無ければ『判定不能』と書く。"
@@ -383,6 +450,19 @@ def build_sections(pack: dict) -> list[dict]:
         })
 
     sections += [
+        # **静穏週でも必ず書く。** 「今週は何も起きなかった」と
+        # 「これからどこへ向かうか分からない」は別のことだから。
+        {"id": "outlook", "kind": "outlook", "order": 79,
+         "heading": "## 5.9 これから — 短期(1ヶ月) / 中期(3ヶ月) / 長期(半年以降)",
+         "spec": ("仕様の「### 5.9 これから」に従って書く。"
+                  "各ホライズンで **①統計レンジ ②何がその範囲を決めるか（具体的な出来事）"
+                  "③外れるとしたら何が起きたときか（観測点つき）** の3点を必ず書く。"
+                  "**確率を書くな。** レバレッジの非対称性（往復すると戻らない）を"
+                  "必ず具体額で示す。短期・中期・長期で結論が同じなら分析していない —"
+                  "時間軸ごとに効く要因が違うことを書く。"
+                  "レンジは前提の帰結であって予測ではない旨を添え、"
+                  "`vol_calibration` があれば前提σと実測σの乖離に触れる。"),
+         "needs_body": True},
         {"id": "decide", "kind": "decide", "order": 80,
          "heading": "## 6. 事前決定 — 翌週の条件付き政策",
          "spec": ("仕様の「### 6. 事前決定」に従って書く。**これが土曜の唯一の行動。**"

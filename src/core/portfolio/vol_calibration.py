@@ -66,11 +66,34 @@ UNRELIABLE_RATIO = 2.0
 
 
 def realized_vol(closes: Any, window: int = STRUCTURAL_WINDOW) -> Optional[float]:
-    """年率換算の実測ボラティリティ(%)。観測が足りなければ None。"""
+    """年率換算の実測ボラティリティ(%)。観測が足りなければ None。
+
+    ⚠️ **窓を満たさないときは窓を縮める。** `volatility()` は
+    `len < window+1` で None を返すため、窓を 250 に固定すると
+    **東証銘柄は永久に較正されない**（日本の年間営業日は約245日で、
+    1年分の履歴が 244本しか無い＝251本に届かない）。
+
+    実際これが起きていた。このモジュールの docstring が
+    「2802.T の 250日実測は 42.9%、前提 22% は 1.95倍で本物の乖離」と
+    書いているのに、パイプラインは一度もその較正に到達せず、
+    **日本株だけが前提σのまま**レンジを出し続けていた。
+
+    ``MIN_OBSERVATIONS`` を下回るところまでは縮めない（そこは本当に観測不足）。
+
+    ⚠️ 下限は ``min(MIN_OBSERVATIONS, window)`` であって ``MIN_OBSERVATIONS``
+    ではない。**呼び出し側が意図的に短い窓を要求している場合があるため**
+    （``SPOT_WINDOW=20`` の足元ボラ）。ここを 120 固定にすると
+    スポットσが常に None になり、「窓の不一致で騒がない」というこのモジュールの
+    存在理由そのものが消える。
+    """
     try:
         from src.core.technicals import volatility
 
-        return volatility(closes, window=window, annualize=True)
+        n = _count(closes)
+        effective = min(window, max(n - 1, 0))
+        if effective < min(MIN_OBSERVATIONS, window):
+            return None
+        return volatility(closes, window=effective, annualize=True)
     except Exception:
         return None
 
@@ -120,6 +143,9 @@ def calibrate(
         out["verdict"] = "insufficient_data"
         return out
 
+    # 実際に使った窓を開示する。日本株は約244本しか無いので 250 では測れず、
+    # ここが 244 等に縮む。**縮めたことを黙らない。**
+    out["effective_window"] = min(STRUCTURAL_WINDOW, max(n - 1, 0))
     realized = realized_vol(closes, window=STRUCTURAL_WINDOW)
     if realized is None or not isinstance(assumed, (int, float)) or assumed <= 0:
         out["reason"] = "実測または前提が取得できず、較正できません。"

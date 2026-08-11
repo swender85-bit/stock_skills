@@ -74,7 +74,24 @@ class TestBuildSections:
     def test_body_dependent_sections_flagged(self, pack):
         sections = driver.build_sections(pack)
         needs = {s["id"] for s in sections if s.get("needs_body")}
-        assert needs == {"decide", "audit", "limits", "verdict"}
+        # outlook（5.9 これから）は**ここまでの全節を踏まえて書く節**なので
+        # 本文依存。材料だけ渡して書かせるとレンジの転記に堕ちる。
+        assert needs == {"outlook", "decide", "audit", "limits", "verdict"}
+
+    def test_outlook_section_always_present(self, pack):
+        """静穏週でも見通しは書く。
+
+        「今週は何も起きなかった」と「これからどこへ向かうか分からない」は
+        別のことなので、outlook を静穏で畳んではならない。
+        """
+        pack["information"] = {"quiet": True}
+        ids = [s["id"] for s in driver.build_sections(pack)]
+        assert "outlook" in ids
+
+    def test_outlook_comes_before_the_decision(self, pack):
+        """見通し → 事前決定 の順。決めてから見通すのは順序が逆。"""
+        order = {s["id"]: s["order"] for s in driver.build_sections(pack)}
+        assert order["outlook"] < order["decide"]
 
     def test_symbol_less_fund_still_gets_a_section(self, pack):
         """ティッカーが無い投信（FANG+等）を落とさない。落とすと保有が黙って消える。"""
@@ -143,6 +160,91 @@ class TestSlicePack:
         material = driver.slice_pack(pack, {"kind": "unknown_kind"})
         assert set(material) == {"meta", "portfolio", "reconciliation_status",
                                  "information"}
+
+    def test_outlook_slice_carries_what_determines_the_range(self, pack):
+        """見通しの節には**レンジを決めるもの**を全部渡す。
+
+        `projection` だけ渡すと、Claude は数字を転記して終わる。
+        「何がその範囲を決めるか」を書かせるには、中身の決算・レジーム・
+        ドラッグ・イベントが同じ皿に載っていなければならない。
+        """
+        material = driver.slice_pack(pack, {"kind": "outlook"})
+        for key in ("projection", "vol_calibration", "regime", "constituents",
+                    "forward_horizon", "leverage_sleeve", "scenarios",
+                    "monthly_contribution"):
+            assert key in material, key
+
+    def test_outlook_slice_keeps_reconciliation_state(self, pack):
+        """未照合のまま確定値として語らせない（照合状態は全節に渡す）。"""
+        material = driver.slice_pack(pack, {"kind": "outlook"})
+        assert "reconciliation_status" in material
+
+    def test_no_pack_key_is_orphaned(self, pack):
+        """**パックに入れただけでは節に届かない。**
+
+        constituents / leverage_sleeve / forward_horizon / regime /
+        watch_plan / composition_check は、生成されているのにどの節にも
+        渡っていなかった（プロンプトは「必ず書け」と指示していたのに、
+        材料が来ないので空振りしていた）。同じ事故を再発させないための番人。
+        """
+        import inspect
+        import re
+
+        # 出力キー名では判定できない（holdings → holdings_overview のように
+        # 名前を変えて渡す節がある）。**読まれているか**をソースで見る。
+        read = set(re.findall(r'pack\.get\("([a-z_]+)"\)',
+                              inspect.getsource(driver.slice_pack)))
+
+        produced = {
+            "constituents", "leverage_sleeve", "forward_horizon", "regime",
+            "watch_plan", "composition_check", "projection", "vol_calibration",
+            "scenarios", "monthly_contribution", "positions_assumptions",
+            "holdings", "holding_news", "market_news", "primary_filings",
+            "external_views", "narrative", "moomoo", "indices", "forward",
+            "constraints", "falsification", "reconciliation", "information",
+            "cumulative_diff", "week_diff", "execution_audit", "model_audit",
+            "prior_context", "forward_schedule", "schedule_status", "portfolio",
+        }
+        orphans = sorted(produced - read)
+        assert not orphans, f"どの節にも渡っていない材料: {orphans}"
+
+    def test_verdict_gets_watch_plan_and_regime(self, pack):
+        """仕様 §0 が名指しで要求する材料。無いと 🔴 指示が空振りする。"""
+        pack["watch_plan"] = {"holdings": {"etf_only": [{"symbol": "NVDA"}]}}
+        pack["regime"] = {"tilt": "risk_on"}
+        sec = next(s for s in driver.build_sections(pack) if s["id"] == "verdict")
+        material = driver.slice_pack(pack, sec)
+        assert material["watch_plan"] == pack["watch_plan"]
+        assert material["regime"] == pack["regime"]
+
+    def test_forward_gets_multi_month_horizon(self, pack):
+        """§3 は「翌週だけで終わらせるな」と書いている。材料が要る。"""
+        pack["forward_horizon"] = {"available": True}
+        pack["constituents"] = {"available": True, "dossiers": []}
+        sec = next(s for s in driver.build_sections(pack) if s["id"] == "forward")
+        material = driver.slice_pack(pack, sec)
+        assert material["forward_horizon"] == {"available": True}
+        assert "constituents" in material
+
+    def test_heat_slice_drops_news_but_keeps_coverage(self, pack):
+        """縮めたことを「材料が無かった」に化けさせない。"""
+        pack["constituents"] = {
+            "available": True, "covered_pct": 62.0, "missing_news": ["NVDA"],
+            "dossiers": [{"symbol": "NVDA", "effective_pct": 20.2, "rsi14": 64.4,
+                          "next_earnings": "2026-08-27", "signals": ["継続上昇"],
+                          "news": [{"headline": "x" * 500}],
+                          "per": 34.2, "operating_margin": 0.65}],
+        }
+        sec = next(s for s in driver.build_sections(pack) if s["kind"] == "heat")
+        got = driver.slice_pack(pack, sec)["constituents"]
+        d = got["dossiers"][0]
+        assert "news" not in d and "per" not in d
+        assert d["rsi14"] == 64.4 and d["next_earnings"] == "2026-08-27"
+        # 取得状況は残す
+        assert got["covered_pct"] == 62.0 and got["missing_news"] == ["NVDA"]
+
+    def test_slim_constituents_passes_through_non_dict(self):
+        assert driver._slim_constituents(None) is None
 
     def test_every_section_slices_without_error(self, pack):
         for sec in driver.build_sections(pack):

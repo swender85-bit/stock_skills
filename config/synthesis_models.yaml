@@ -24,7 +24,7 @@ meta:
   note: |
     節ID は scripts/weekly_deep_driver.py の build_sections() が付けるもの。
     verdict / reconcile / belief / forward / constraints / opportunity /
-    holding_* / heat / decide / audit / limits
+    holding_* / heat / outlook / decide / audit / limits
   cost_note: |
     スイープは API コストがかかります。節×モデル×fixture の全組み合わせを毎回
     回すのは高いので、まず節0〜4だけ・fixture 2種から試してください。

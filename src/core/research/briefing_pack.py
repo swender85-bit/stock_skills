@@ -1263,6 +1263,8 @@ def build_symbol_briefing(
         [sleeve_row], {"lookthrough": symbol_lookthrough}, 100.0)
     symbol_regime = _safe_regime(
         {"total_jpy": None, "cash_jpy": None}, symbol_sleeve, symbol_constituents)
+    symbol_projection = _safe_symbol_projection(symbol, holding_row, technicals)
+    symbol_composition = _safe_symbol_composition(symbol, holding_row.get("name"))
     # 前提の衝突（改善4）は PF 全体の話だが、**個別判断にこそ効く**:
     # 「この銘柄のテーゼは円安継続が前提。だが円高を待つ計画がある」は、
     # その銘柄を買う/持ち続ける判断に直接ぶつかる。
@@ -1326,7 +1328,98 @@ def build_symbol_briefing(
         "leverage_sleeve": symbol_sleeve,
         # 市況レジーム（状態の記述。予測ではない）
         "regime": symbol_regime,
+        # 短期(1ヶ月)/中期(3ヶ月)/長期(6ヶ月・3年)のレンジ。
+        # **点推定ではない。** 前提σの帰結であり、前提が外れればレンジも外れる。
+        "projection": symbol_projection,
+        # 投信なら、名前が指す指数に実際に追随しているかの実測。対象外なら空。
+        "composition_check": symbol_composition,
     }
+
+
+def _safe_symbol_projection(
+    symbol: str, holding: dict, technicals: Optional[dict]
+) -> dict:
+    """この銘柄100を基準にした 1ヶ月/3ヶ月/6ヶ月/3年 のレンジ。
+
+    **金額ではなく指数(100基準)で返す。** 保有していない銘柄にも答えるので、
+    金額を出すと「いくら儲かる」と読まれてしまう。倍率で語れば
+    保有・非保有どちらでも同じ意味で読める。
+
+    ボラティリティは**週次と同じ較正器**（`vol_calibration.calibrate`）に通す。
+    ここで独自に実測を測って置き換えると、週次と個別で違うσを使うことになり、
+    「質問の形式で判断が変わる」ことそのものになる。較正器は実測を
+    そのまま採らず縮小推定で混ぜ、前提・実測・採用値を全部開示する。
+    """
+    try:
+        from src.core.portfolio.projection import (
+            HORIZON_LABELS, HORIZON_ORDER, HORIZONS, project_value,
+            volatility_drag,
+        )
+        from src.core.portfolio.vol_calibration import calibrate
+        from src.core.portfolio.weekly import _assumption, _infer_category
+
+        lev = int(holding.get("leverage") or 1)
+        assumption = _assumption(
+            _infer_category({"quote_symbol": symbol}), symbol)
+        vol = float(assumption.get("annual_vol_pct") or 0.0)
+        ret = float(assumption.get("annual_return_pct") or 0.0)
+        vol_source = "前提（カテゴリ/銘柄テーブル）"
+
+        calib = calibrate(symbol, assumption, _closes_1y(symbol), leverage=lev)
+        used = calib.get("used_underlying_vol_pct")
+        if calib.get("available") and isinstance(used, (int, float)):
+            vol = float(used)
+            vol_source = (
+                f"較正済み（前提 {assumption.get('annual_vol_pct')}% × "
+                f"{calib.get('effective_window')}日実測 "
+                f"{calib.get('implied_underlying_vol_pct')}%）")
+
+        rows = []
+        for key in HORIZON_ORDER:
+            days = HORIZONS[key][1]
+            p = project_value(100.0, ret, vol, days, lev)
+            rows.append({
+                "key": key, "label": HORIZON_LABELS[key], "horizon_days": days,
+                "low_pct": p["low"] - 100.0,
+                "mid_pct": p["mid"] - 100.0,
+                "high_pct": p["high"] - 100.0,
+            })
+
+        return {
+            "available": True,
+            "basis": "現在値を100とした指数",
+            "underlying_vol_pct": vol,
+            "vol_source": vol_source,
+            "annual_return_pct": ret,
+            "leverage": lev,
+            "drag_pct": volatility_drag(vol, lev),
+            "underlying": assumption.get("underlying"),
+            "calibration": calib,
+            "horizons": rows,
+            "note": ("**予測ではなく、置いた前提の帰結。** 前提σが外れればレンジも外れる。"
+                     "確率としては読めない（中央80%区間の目安）。"),
+        }
+    except Exception as e:
+        return {"available": False,
+                "note": f"レンジを算出できませんでした（{type(e).__name__}: {e}）。"
+                        "『変動しない』という意味ではありません。"}
+
+
+def _closes_1y(symbol: str) -> list:
+    """直近1年の終値列。取れなければ空リスト（較正器が観測不足として扱う）。"""
+    try:
+        from src.data import yahoo_client
+
+        hist = yahoo_client.get_price_history(symbol, period="1y")
+        if hist is None or "Close" not in getattr(hist, "columns", []):
+            return []
+        # ⚠️ `hist.get("Close") or []` と書いてはいけない。pandas の Series は
+        # 真偽評価で ValueError を投げるので、実測σが**黙って**前提σへ
+        # フォールバックする（実際なった）。
+        return [float(c) for c in hist["Close"].tolist()
+                if c is not None and c == c and c > 0]
+    except Exception:
+        return []
 
 
 def _safe_symbol_lookthrough(holding: dict) -> dict:
@@ -1349,6 +1442,40 @@ def _safe_symbol_lookthrough(holding: dict) -> dict:
                 "unresolved": [],
                 "note": f"中身を展開できませんでした（{type(e).__name__}）。"
                         "**『中身が無い』ではありません。**"}
+
+
+def _safe_symbol_composition(symbol: str, name: Optional[str]) -> dict:
+    """この銘柄が構成検証の対象（投信）なら、その検証結果だけを返す。
+
+    `stock_deep.md` の材料表は `composition_check` を約束していたが、
+    **個別パックはこれを一度も入れていなかった**。仕様が要求する材料が
+    届かなければ、仕様の指示は空振りする。
+
+    照合は名前で行う（投信はティッカーを持たないことがある）。
+    該当しない銘柄では空を返す — **空は「構成が正しい」ではなく「対象外」**。
+    """
+    try:
+        all_checks = _safe_composition_check()
+        if not isinstance(all_checks, dict) or all_checks.get("_error"):
+            return all_checks if isinstance(all_checks, dict) else {}
+        keys = [str(k) for k in all_checks
+                if _matches_fund(str(k), symbol, name)]
+        return {k: all_checks[k] for k in keys}
+    except Exception as e:
+        return {"_error": f"構成を検証できませんでした（{type(e).__name__}）。"
+                          "**『検証済み』ではありません。**"}
+
+
+def _matches_fund(fund_name: str, symbol: str, name: Optional[str]) -> bool:
+    """設定上の投信名と、問い合わせ対象が同じものを指しているか。"""
+    haystack = f"{symbol or ''} {name or ''}".upper()
+    fund = fund_name.upper()
+    if fund in haystack:
+        return True
+    # 「iFreeNEXT FANG+」対「iFreeNEXT FANG+インデックス」のような表記ゆれ。
+    # 語単位で見て、有意な語が全部含まれていれば同一とみなす。
+    words = [w for w in fund.replace("+", " ").split() if len(w) > 2]
+    return bool(words) and all(w in haystack for w in words)
 
 
 def _safe_assumption_space_for(symbol: str) -> dict:
