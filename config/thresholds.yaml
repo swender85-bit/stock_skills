@@ -118,3 +118,11 @@ theme_balance:
   per_warn_multiplier: 2.0     # セクター中央PERの何倍で警告
   fng_caution_threshold: 80    # F&G スコアがこれ以上でテーマ追加購入に警告
   theme_stale_days: 90         # テーマ鮮度の日数閾値
+
+# ---------------------------------------------------------------------------
+# Data quality gate (src/core/research/briefing_pack.py, scripts/weekly_deep_driver.py)
+# 2026-08-11 の修理で導入。ハードコードしていた 0.7 をここへ移した。
+# ---------------------------------------------------------------------------
+data_quality:
+  min_price_coverage: 0.7      # これを下回るパックからレポートを書かない
+  abort_report_max_lines: 80   # 打ち切り時に出す欠測報告の行数上限

@@ -9,6 +9,7 @@
 Centralised threshold loader (KIK-446).
 
 - `get_thresholds() -> dict` — Return the full thresholds dict, loading from disk on first call.
+- `load_status() -> dict` — 髢ｾ蛟､繝輔ぃ繧､繝ｫ繧定ｪｭ繧√◆縺九ょ他縺ｳ蜃ｺ縺怜�ｴ縺後取里螳壼､縺ｧ蜍輔＞縺ｦ縺�繧九上→豌励▼縺代ｋ繧医≧縺ｫ縲�
 - `th(section: str, key: str, default)` — Look up *section.key* in thresholds, returning *default* on miss.
 
 ### src.core.action_item_bridge
@@ -245,6 +246,33 @@ A single rebalancing action proposal.
 
 - `to_dict() -> dict`
 - `empty() -> 'SimulationResult'` — 繧ｷ繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ荳榊庄譎ゅ�ｮ遨ｺ邨先棡縲�
+
+### src.core.observation
+
+隕ｳ貂ｬ縺ｮ隧ｦ陦後ｒ隨ｬ荳邏壹�ｮ繝�繝ｼ繧ｿ縺ｨ縺励※謇ｱ縺�縲�
+
+- `classify(value: Any, *, attempted: bool=True, error: Optional[str]=None, expected: bool=True) -> str` — 1縺､縺ｮ隕ｳ貂ｬ邨先棡繧�4迥ｶ諷九↓蛻�鬘槭☆繧九�
+- `coverage_of(rows: Sequence[dict], predicate: Callable[[dict], bool], id_key: str='symbol', label: str='') -> Coverage` — 陦後�ｮ髮�蜷医↓縺､縺�縺ｦ縲∬ｦｳ貂ｬ縺ｧ縺阪◆莉ｶ謨ｰ縺ｨ谺縺代◆隴伜挨蟄舌ｒ謨ｰ縺医ｋ縲�
+- `partial_total(rows: Sequence[dict], key: str, id_key: str='symbol', label: str='') -> tuple[float, Coverage]` — 蜷郁ｨ医→縲√◎縺ｮ蜷郁ｨ医′菴穂ｻｶ縺九ｉ蜃ｺ縺溘°繧�**蠢�縺壻ｸ邱偵↓**霑斐☆縲�
+- `safe_ratio(rows: Sequence[dict], numerator_key: str, denominator_key: str, id_key: str='symbol') -> dict` — 豈皮紫繧偵�**蛻�蟄舌→蛻�豈阪′蜷後§髮�蜷医°繧画擂縺ｦ縺�繧九→縺阪□縺�**霑斐☆縲�
+- `annotate(value: Any, coverage: Coverage, unit: str='莉ｶ') -> str` — 陦ｨ遉ｺ逕ｨ縲よｯ肴焚縺梧ｬ縺代※縺�繧後�ｰ蠢�縺壻ｽｵ險倥＆繧後ｋ譁�蟄怜�励ｒ菴懊ｋ縲�
+- `core_failures(rows: Sequence[dict], status_key: str='price_status', id_key: str='symbol') -> list` — 荳ｭ譬ｸ繝�繝ｼ繧ｿ縺ｮ蜿門ｾ励↓螟ｱ謨励＠縺溯｡後ｒ縲∫炊逕ｱ縺､縺阪〒蛻玲嫌縺吶ｋ縲�
+
+#### class Coverage
+縺ゅｋ髮�蜷医ｒ菴穂ｻｶ隕ｳ貂ｬ縺ｧ縺阪◆縺九�**髮�險亥､縺ｫ縺ｯ蠢�縺壹％繧後ｒ豺ｻ縺医ｋ縲�**
+
+| Field | Type |
+|:---|:---|
+| `total` | `int` |
+| `observed` | `int` |
+| `missing` | `list` |
+| `label` | `str` |
+
+- `complete() -> bool`
+- `ratio() -> float`
+- `fraction() -> str`
+- `note(unit: str='莉ｶ') -> str` — 豈肴焚縺ｮ菴ｵ險俶枚縲ょｮ悟�ｨ縺ｪ繧臥ｩｺ譁�蟄励ｒ霑斐☆�ｼ育┌螳ｳ縺ｪ霑ｽ險倥↓縺励↑縺��ｼ峨�
+- `to_dict() -> dict`
 
 ### src.core.portfolio.backtest
 

@@ -21,6 +21,7 @@ from src.core.portfolio.projection import (
     drawdown_scenario,
     project_portfolio,
 )
+from src.core import observation
 from src.core.technicals import analyze_prices
 
 
@@ -243,6 +244,22 @@ def analyze_holding(holding: dict, price_data: Optional[dict], fx_rate: float) -
     pl_jpy = (value_jpy - cost_jpy) if value_jpy is not None else None
     pl_pct = ((price - cost) / cost * 100.0) if (price is not None and cost) else None
 
+    # 価格の取得結果を第一級のデータとして残す（src/core/observation.py）。
+    # `price is None` だけでは「取りに行って失敗した」と「そもそも観測しなかった」
+    # が区別できず、下流で「無かったこと」として集計に混ざる。
+    fetch_error = (price_data or {}).get("error")
+    if price is not None:
+        price_status = observation.OBSERVED
+        price_unavailable_reason = None
+    elif price_data is None:
+        price_status = observation.NOT_ATTEMPTED
+        price_unavailable_reason = "この銘柄の価格取得を試みていません"
+    else:
+        price_status = observation.UNAVAILABLE
+        price_unavailable_reason = (
+            str(fetch_error) if fetch_error else
+            "取得を試みたが値が返らなかった（『値動きが無かった』ではない）")
+
     return {
         "name": holding.get("name", ""),
         "symbol": symbol,
@@ -254,6 +271,8 @@ def analyze_holding(holding: dict, price_data: Optional[dict], fx_rate: float) -
         "cost_price": cost,
         "price": price,
         "price_source": price_source,
+        "price_status": price_status,
+        "price_unavailable_reason": price_unavailable_reason,
         "currency": currency,
         "value_local": value_local,
         "value_jpy": value_jpy,
@@ -297,8 +316,15 @@ def build_report_data(
         cash_jpy += jpy
         cash_items.append({**c, "value_jpy": jpy})
 
-    invested = sum(a["value_jpy"] for a in analyses if a["value_jpy"] is not None)
+    # 🔴 合計と「その合計が何件から出たか」を必ず一緒に持つ。
+    #
+    # 2026-08-08、価格が取れなかった9件がこの sum から黙って消え、
+    # 残り1件の合計が注記なしで「総資産」として出荷された（94%の過少表示）。
+    # 合計だけを返す形に戻してはならない。詳細は src/core/observation.py。
+    invested, value_coverage = observation.partial_total(
+        analyses, "value_jpy", label="評価額")
     total = invested + cash_jpy
+    price_failures = observation.core_failures(analyses)
 
     # 前提ボラを実測（250日窓）で較正する。テクニカルの volatility_pct は
     # 20日窓なので前提σと比較してはならない。詳細は vol_calibration の docstring。
@@ -377,6 +403,11 @@ def build_report_data(
         "cash_jpy": cash_jpy,
         "invested_jpy": invested,
         "total_jpy": total,
+        # この2つは coverage が complete でないかぎり**部分値**である。
+        # 表示側は coverage.note() の併記なしにこれらを出してはならない。
+        "coverage": value_coverage.to_dict(),
+        "is_partial": not value_coverage.complete,
+        "price_failures": price_failures,
         "projection": projection,
         "scenarios": scenarios,
         "monthly_contribution": monthly_contribution,

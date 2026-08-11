@@ -29,6 +29,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from src.core import observation
+from src.core._thresholds import th
 from src.core.portfolio.weekly import (
     build_report_data,
     load_holdings_config,
@@ -631,7 +633,10 @@ def _safe_external_views(holdings: list[dict]) -> dict:
 #: 価格がこの比率を下回ったら、レポートを書かせずに再実行させる。
 #: 2026-08-08 は 10件中 9件が null（カバレッジ 10%）で、それでもレポートが
 #: 生成・保存された。**分析ではなく「取得できず」の一覧が届いた。**
-MIN_PRICE_COVERAGE = 0.7
+#:
+#: 閾値は `config/thresholds.yaml` の `data_quality.min_price_coverage`。
+#: ハードコードしない（打ち切りに入る割合は運用で調整する対象である）。
+MIN_PRICE_COVERAGE = th("data_quality", "min_price_coverage", 0.7)
 
 
 def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
@@ -901,16 +906,33 @@ def _safe_diff(pack_like: dict, store: bool) -> dict:
 
 
 def _portfolio_summary(base: dict) -> dict:
+    """PF の集計。**部分値を全体値の顔で返さない。**
+
+    2026-08-08 の「評価損益 +2.1%」は、分子が価格の取れた1銘柄、
+    分母が取得単価から出せる全10銘柄という混合分母だった。
+    比率としての意味を持たない数字が、意味のある顔をして出た。
+
+    `safe_ratio` は分子と分母の母集団が一致しないとき値を返さない（抑制）。
+    合計は返すが、必ず coverage を添える（明示）。詳細は src/core/observation.py。
+    """
     analyses = base.get("analyses") or []
-    total_pl = sum(a["pl_jpy"] for a in analyses if a.get("pl_jpy") is not None)
-    total_cost = sum(a["cost_jpy"] for a in analyses if a.get("cost_jpy") is not None)
+    total_pl, pl_coverage = observation.partial_total(
+        analyses, "pl_jpy", label="評価損益")
+    ratio = observation.safe_ratio(analyses, "pl_jpy", "cost_jpy")
+    value_coverage = base.get("coverage") or {}
     return {
         "total_jpy": base.get("total_jpy"),
         "invested_jpy": base.get("invested_jpy"),
         "cash_jpy": base.get("cash_jpy"),
         "fx_rate": base.get("fx_rate"),
         "total_pl_jpy": total_pl,
-        "pl_pct": (total_pl / total_cost * 100.0) if total_cost else None,
+        "pl_pct": ratio["value"],
+        "pl_pct_suppressed": ratio["suppressed"],
+        "pl_pct_suppressed_reason": ratio["reason"],
+        "pl_coverage": pl_coverage.to_dict(),
+        "coverage": value_coverage,
+        "is_partial": bool(base.get("is_partial")),
+        "price_failures": base.get("price_failures") or [],
     }
 
 

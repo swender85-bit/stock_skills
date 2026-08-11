@@ -767,9 +767,12 @@ def build_header(pack: dict) -> str:
         f"# 週次ポートフォリオ深掘り分析 {today}",
         "",
         f"- 総資産: ¥{_fmt(pf.get('total_jpy'))}"
-        f"（うち現金 ¥{_fmt(pf.get('cash_jpy'))}）",
+        f"（うち現金 ¥{_fmt(pf.get('cash_jpy'))}）"
+        f"{(pf.get('coverage') or {}).get('note') or ''}",
+        # 損益率は分子と分母の母集団が一致するときだけ出る（混合分母の抑制）。
         f"- 評価損益: ¥{_fmt(pf.get('total_pl_jpy'))}"
-        f"（{_fmt(pf.get('pl_pct'), '%', 1)}）",
+        + (f"（{_fmt(pf.get('pl_pct'), '%', 1)}）" if not pf.get("pl_pct_suppressed")
+           else f" ⚠️ 損益率は非表示: {pf.get('pl_pct_suppressed_reason')}"),
         f"- 為替: {_fmt(meta.get('fx_rate'), ' 円/USD', 2)}",
         f"- 保有データ源: {meta.get('holdings_source') or '不明'}"
         f" / 取り込み: {_import_label(meta.get('holdings_import'))}",
@@ -803,8 +806,152 @@ def build_header(pack: dict) -> str:
     return "\n".join(lines)
 
 
+def missing_sections(state: dict, out_dir: Path) -> list:
+    """本文に載らなかった節を、理由つきで列挙する。
+
+    🔴 2026-08-08、執筆に失敗した3節（監査・限界・判定）が本文から
+    **無言で削除**され、目次にも痕跡が残らなかった。
+    「取得できなかったものを『無かった』と書くな」を全節に課しているシステムが、
+    自分自身の欠落についてだけはそれを守らなかった。
+    """
+    out = []
+    for s in sorted(state.get("sections") or [], key=lambda x: x.get("order", 0)):
+        readable = False
+        if s.get("status") == "done" and s.get("file"):
+            try:
+                readable = bool((out_dir / s["file"]).read_text(encoding="utf-8").strip())
+            except Exception:
+                readable = False
+        if readable:
+            continue
+        out.append({
+            "order": s.get("order"),
+            "heading": str(s.get("heading") or s.get("key") or "(無題)").lstrip("# "),
+            "status": s.get("status") or "unknown",
+            "attempts": s.get("attempts", 0),
+            "reason": s.get("error") or {
+                "pending": "未着手のまま打ち切られました",
+                "failed": "執筆に失敗しました",
+                "done": "ファイルが読めませんでした（保存に失敗）",
+            }.get(s.get("status"), "理由不明"),
+        })
+    return out
+
+
+def build_missing_block(missing: list) -> str:
+    """欠落節の告知ブロック。**本文の最初に置く。**"""
+    if not missing:
+        return ""
+    lines = ["## ⚠️ このレポートには欠落があります", "",
+             f"以下の {len(missing)} 節は本文に含まれていません。"
+             "**書かれなかったのであって、「該当なし」ではありません。**", "",
+             "| 節 | 状態 | 試行 | 理由 |", "|---|---|---|---|"]
+    for m in missing:
+        lines.append(f"| {m['heading']} | {m['status']} | {m['attempts']}回 | {m['reason']} |")
+    lines += ["", "この欠落を埋めるには次を実行してください:", "",
+              "```bash", "python scripts/weekly_deep_driver.py --resume-only", "```"]
+    return "\n".join(lines)
+
+
+def build_abort_report(pack: dict, quality: dict, day: str) -> str:
+    """データが揃わない週の、正しい出力（診断書 C-3）。
+
+    **保有の過半で価格が取れない週は、投資分析を打ち切る。**
+    770行の欠測報告を書くのではなく、次の4つだけを出す。
+
+    1. 何が取れなかったか
+    2. どこで落ちたか
+    3. 修理のために次に走らせるコマンド
+    4. 分析は行っていないという明示
+
+    行数上限は `config/thresholds.yaml` の `data_quality.abort_report_max_lines`。
+    """
+    meta = pack.get("meta") or {}
+    pf = pack.get("portfolio") or {}
+    net = meta.get("network") or {}
+    missing = quality.get("missing") or []
+    reasons = quality.get("reasons") or {}
+    failures = pf.get("price_failures") or []
+
+    lines = [
+        "---",
+        f"title: 週次PF分析 {day}（欠測により分析なし）",
+        "tags: [投資, ポートフォリオ, 週次レポート, 欠測]",
+        f"created: {day}",
+        "---",
+        "",
+        f"# 週次PF分析 {day} — 分析は行っていません",
+        "",
+        "## 結論",
+        "",
+        f"**このレポートに投資判断はありません。** 価格カバレッジが "
+        f"{quality.get('priced', 0)}/{quality.get('total', 0)} "
+        f"（{(quality.get('price_coverage') or 0) * 100:.0f}%、必要 "
+        f"{(quality.get('min_required') or 0) * 100:.0f}%）で、"
+        "**書ける材料が揃っていない**ためです。",
+        "",
+        "これは「値動きが無かった」でも「材料が無かった」でもありません。"
+        "**取りに行けなかった**という意味です。",
+        "",
+        "## 何が取れなかったか",
+        "",
+    ]
+    if missing:
+        lines += ["| 銘柄 | 取得側が残した理由 |", "|---|---|"]
+        for sym in missing[:30]:
+            lines.append(f"| {sym} | {reasons.get(sym) or '理由未記録'} |")
+    else:
+        lines.append("（欠測銘柄の記録がありません。これ自体が取得層の不備です）")
+
+    lines += ["", "## どこで落ちたか", ""]
+    if net:
+        lines.append(f"- ネットワーク: ready={net.get('ready')} / {net.get('message') or '—'}")
+    timings = meta.get("timings_sec") or {}
+    if timings:
+        lines.append(f"- 価格・保有の取得にかかった時間: {timings.get('prices_and_holdings')}秒"
+                     "（極端に短ければ、繋がる前に取りに行っています）")
+    for f in failures[:10]:
+        lines.append(f"- {f.get('id')}: {f.get('reason')}")
+    if not net and not timings and not failures:
+        lines.append("- 落下点の記録がありません（取得層がエラーを残していません）")
+
+    lines += [
+        "",
+        "## 次に走らせるコマンド",
+        "",
+        "```bash",
+        "python scripts/weekly_deep_driver.py --resume-only   # 取り直して書き継ぐ",
+        "python scripts/build_briefing_pack.py                # パックだけ作り直す",
+        "python scripts/weekly_deep_driver.py --force-low-quality  # 承知の上で書かせる",
+        "```",
+        "",
+        "## 明示",
+        "",
+        "分析・推奨・事前決定は**一切行っていません**。"
+        "この週のポジションについて何かを判断する材料として、この文書を使わないでください。",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def save_report(text: str, day: str, dry_run: bool = False) -> str:
+    """レポートを output/ と vault に届ける。欠測報告も同じ経路で届ける。"""
+    filename = f"週次PF分析_{day}.md"
+    if dry_run:
+        return filename
+    from src.output.sync import save_and_sync
+
+    result = save_and_sync(text, filename)
+    for m in result.get("messages", []):
+        log(f"save: {m}")
+    return str(result.get("synced_path") or result.get("output_path") or filename)
+
+
 def assemble(state: dict, out_dir: Path, pack: dict) -> str:
     body = [build_header(pack)]
+    missing = missing_sections(state, out_dir)
+    if missing:
+        body.append(build_missing_block(missing))
     opportunity_heading_done = False
     for s in sorted(state["sections"], key=lambda x: x["order"]):
         if s.get("status") != "done" or not s.get("file"):
@@ -936,13 +1083,22 @@ def _run(args) -> int:
             day = str(state.get("date") or day)
             log(f"未完了の週次({day})を引き継いで再開します。")
 
+    # 欠測で打ち切った週の state は「取り直す予定がある」という記録である。
+    # 節を1つも持たないので、そのまま再開すると空のレポートを組み立ててしまう。
+    # 再開時はパックから作り直す（＝取得のやり直し）。
+    # `--resume-only` でもここは動く。**動かないと打ち切りが放置になる**（H5）。
+    retry_after_abort = bool(state and state.get("aborted_low_quality"))
+    if retry_after_abort:
+        log("前回は欠測で打ち切っています。パックを作り直して取り直します。")
+        state = None
+
     if state:
         pack_path = Path(state["pack_path"])
         if not pack_path.exists():
             log("記録されたパックが見つかりません。作り直します。")
             state = None
 
-    if not state and args.resume_only:
+    if not state and args.resume_only and not retry_after_abort:
         log("再開すべき途中状態はありません（--resume-only のため何もしません）。")
         return EXIT_OK
 
@@ -965,7 +1121,7 @@ def _run(args) -> int:
         quality = (pack.get("meta") or {}).get("data_quality") or {}
         if quality and not quality.get("usable", True) and not args.force_low_quality:
             log(f"⛔ {quality.get('verdict')}")
-            log("   レポートを書かずに中断します。次の起動（最大3時間後）で取り直します。")
+            log("   投資分析は行いません。欠測報告だけを出します。")
             log("   すぐ書かせたい場合: --force-low-quality")
             try:
                 (out_dir / f"lowquality_{day}.json").write_text(
@@ -975,6 +1131,32 @@ def _run(args) -> int:
                                ensure_ascii=False, indent=2), encoding="utf-8")
             except Exception:
                 pass
+
+            # 🔴 打ち切り時も state を必ず残す（H5）。
+            #
+            # 以前はここで state を保存する前に return しており、
+            # `--resume-only` の再開タスクは state が無いと何もしないため、
+            # **その週はレポートが出ないまま誰も気づかない**状態だった。
+            # ログの「3時間後に取り直します」は事実に反していた。
+            state = {
+                "date": day,
+                "pack_path": str(pack_path.resolve()),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "model": args.model,
+                "finished": False,
+                "report_path": None,
+                "aborted_low_quality": True,
+                "quality": quality,
+                "sections": [],
+            }
+            save_state(spath, state)
+
+            report = build_abort_report(pack, quality, day)
+            if args.dry_run:
+                print(report)
+            else:
+                saved = save_report(report, day, dry_run=False)
+                log(f"欠測報告を保存しました: {saved}")
             return EXIT_INTERRUPTED
         state = {
             "date": day,
