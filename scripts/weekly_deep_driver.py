@@ -38,7 +38,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import date, datetime, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -55,11 +56,48 @@ SPEC_PATH = REPO / ".claude" / "prompts" / "weekly_deep.md"
 DEFAULT_OUT = REPO / "output" / "weekly_deep"
 
 #: 中断（＝再開すればよい）と判定する文言。異常終了と区別する。
+#:
+#: 🔴 2026-08-13 まで `"session limit"` が**入っていなかった**。
+#: 実際の CLI は `You've hit your session limit · resets 1:10am (Asia/Tokyo)` を返すが、
+#: これがどのマーカーにも一致せず「中断」と判定されなかったため、
+#: **残り12節を1つずつ即失敗で消費して打ち切った**（2026-08-13 の実測）。
+#: 待てば必ず成功する失敗を、節ごとの再試行回数で焼き切っていた。
 LIMIT_MARKERS = (
-    "usage limit", "rate limit", "rate_limit", "quota",
+    "usage limit", "session limit", "rate limit", "rate_limit", "quota",
     "上限", "too many requests", "overloaded", "capacity",
-    "insufficient credit", "credit balance",
+    "insufficient credit", "credit balance", "resets ",
 )
+
+#: 解除時刻の抽出。`resets 1:10am (Asia/Tokyo)` / `resets at 13:05` 等。
+_RESET_RE = re.compile(
+    r"resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", re.I)
+
+
+def parse_reset_at(text: str, now: Optional[datetime] = None) -> Optional[datetime]:
+    """エラー文から「いつ解除されるか」を読む。
+
+    再試行の予算は**回数ではなく時刻**である。
+    2026-08-08 は 12:10 に解除される上限に対し 07:12 と 09:12 の2回で
+    予算を使い切り、**解除の3時間前に 15/18 節で出荷**した。
+    取得層では「待てば直る失敗」を区別したのに、執筆層に同じ区別が無かった。
+    """
+    m = _RESET_RE.search(text or "")
+    if not m:
+        return None
+    hour = int(m.group(1))
+    minute = int(m.group(2) or 0)
+    ampm = (m.group(3) or "").lower()
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    if ampm == "am" and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    base = (now or datetime.now()).astimezone()
+    target = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= base:
+        target += timedelta(days=1)      # 深夜の解除は翌日
+    return target
 
 EXIT_OK, EXIT_ERROR, EXIT_INTERRUPTED = 0, 1, 2
 
@@ -1198,6 +1236,22 @@ def _run(args) -> int:
     else:
         pack = json.loads(Path(state["pack_path"]).read_text(encoding="utf-8"))
 
+    # 解除時刻が記録されていて、まだ来ていないなら書き始めない。
+    # 上限中に叩いても失敗するだけで、ログが汚れ、状態が進まない。
+    ra = state.get("retry_after") if state else None
+    if ra:
+        try:
+            until = datetime.fromisoformat(str(ra))
+            now_ = datetime.now().astimezone()
+            if until > now_:
+                mins = int((until - now_).total_seconds() // 60)
+                log(f"⏳ 使用量上限の解除（{until:%m/%d %H:%M}）まであと約{mins}分です。"
+                    "今回は書きません。")
+                return EXIT_INTERRUPTED
+            state.pop("retry_after", None)
+        except ValueError:
+            state.pop("retry_after", None)
+
     models_cfg = load_section_models()
     if models_cfg.get("measured_as_of"):
         log(f"節別モデル配分を適用します（実測 {models_cfg['measured_as_of']}）")
@@ -1229,7 +1283,6 @@ def _run(args) -> int:
         prompt = build_prompt(spec, s, material, body)
 
         t0 = time.time()
-        s["attempts"] = s.get("attempts", 0) + 1
         res = run_claude(prompt, section_model, args.timeout)
 
         if res.get("ok"):
@@ -1248,14 +1301,29 @@ def _run(args) -> int:
             log(f"   ✅ {s['id']} 完了（{time.time() - t0:.0f}s）")
             continue
 
+        if res.get("interrupted"):
+            # 🔴 上限・タイムアウトは「待てば直る失敗」である。
+            # **再試行回数を消費しない。** 消費すると、解除を待てば書けたはずの節が
+            # 「2回失敗したので諦める」に化ける（2026-08-13 に12節がこれで落ちた）。
+            s["status"] = "pending"
+            s["error"] = res.get("error")
+            reset_at = parse_reset_at(str(res.get("error") or ""))
+            if reset_at:
+                state["retry_after"] = reset_at.isoformat()
+                log(f"⏸️  使用量上限。解除予定 {reset_at:%m/%d %H:%M} まで待ちます。")
+                log("   （残りの節は消費していません。解除後の起動で続きから書きます）")
+            else:
+                log(f"⏸️  中断（上限/タイムアウト）: {str(res.get('error'))[:120]}")
+                log("   次の起動で続きから再開します。")
+            save_state(spath, state)
+            return EXIT_INTERRUPTED
+
+        # 待っても直らない失敗だけを回数で数える
+        s["attempts"] = s.get("attempts", 0) + 1
         s["status"] = "failed"
         s["error"] = res.get("error")
         save_state(spath, state)
-        if res.get("interrupted"):
-            log(f"⏸️  中断（使用量上限/タイムアウトの可能性）: {res.get('error')}")
-            log("   次の起動で続きから再開します。")
-            return EXIT_INTERRUPTED
-        log(f"   ⚠️ {s['id']} 失敗: {res.get('error')}")
+        log(f"   ⚠️ {s['id']} 失敗（{s['attempts']}回目）: {str(res.get('error'))[:120]}")
 
     remaining = [s for s in state["sections"]
                  if s.get("status") != "done" and s.get("attempts", 0) < args.max_attempts]
