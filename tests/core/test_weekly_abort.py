@@ -195,3 +195,61 @@ class TestAbortLeavesResumableState:
 
         assert calls, "--resume-only がパックを作り直していない（打ち切りが放置される）"
         assert code == driver.EXIT_INTERRUPTED
+
+
+class TestMaterialsActuallyReachSections:
+    """「パックに入れた」と「節に届いた」は別のこと。
+
+    このリポジトリは同じ形の配線漏れを繰り返している:
+    材料を pack に足したが slice_pack で渡しておらず、
+    プロンプトの 🔴 指示が**空振りしていた**（watch_plan / regime /
+    forward_horizon / constituents / composition_check、そして reading）。
+
+    材料を足したら、必ずここに1行足すこと。
+    """
+
+    def _pack(self):
+        return {
+            "meta": {"as_of": "2026-08-13"},
+            "portfolio": {},
+            "reading": {"available": True, "vault": {"raw_count": 0},
+                        "audit": {"total_sources": 0},
+                        "genealogy": {"theses": {"message": "x"}}},
+            "reconciliation": {"description": {"counts": {}, "healthy_count": 0}},
+        }
+
+    def test_reading_is_top_level_not_nested_in_meta(self):
+        """meta の中に入れると slice_pack が拾えず、節が『材料なし』になる。"""
+        from src.core.research.briefing_pack import _reading_ledger  # noqa: F401
+        import inspect
+
+        from src.core.research import briefing_pack
+
+        src = inspect.getsource(briefing_pack)
+        # meta ブロック（"data_quality" の直後）に reading を置いていないこと
+        assert '"data_quality": _data_quality(holdings, network),\n            "reading"' not in src
+        assert '\n        "reading": _reading_ledger(),' in src
+
+    def test_intake_section_receives_reading(self):
+        sliced = driver.slice_pack(self._pack(), {"kind": "intake", "id": "intake"})
+        assert (sliced.get("reading") or {}).get("available") is True
+
+    def test_belief_section_receives_genealogy(self):
+        sliced = driver.slice_pack(self._pack(), {"kind": "belief", "id": "belief"})
+        assert sliced.get("reading_genealogy") is not None
+
+    def test_limits_section_receives_reading(self):
+        sliced = driver.slice_pack(self._pack(), {"kind": "limits", "id": "limits"})
+        assert sliced.get("reading") is not None
+
+    def test_reconcile_section_receives_description(self):
+        sliced = driver.slice_pack(self._pack(), {"kind": "reconcile", "id": "reconcile"})
+        assert (sliced.get("reconciliation") or {}).get("description") is not None
+
+    def test_intake_section_exists_in_the_skeleton(self):
+        ids = [s["id"] for s in driver.build_sections({"holdings": [], "meta": {}})]
+        assert "intake" in ids
+
+    def test_intake_comes_before_limits(self):
+        secs = {s["id"]: s["order"] for s in driver.build_sections({"holdings": [], "meta": {}})}
+        assert secs["intake"] < secs["limits"]

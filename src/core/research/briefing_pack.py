@@ -1147,8 +1147,12 @@ def build_portfolio_briefing(
             # **これが悪いパックからレポートを書かせない**ための判定材料。
             "network": network,
             "data_quality": _data_quality(holdings, network),
-            "reading": _reading_ledger(),
         },
+        # 🔴 トップレベルに置く。meta の中に入れると slice_pack が
+        # `pack.get("reading")` で拾えず、**節に届かないまま「材料なし」になる**。
+        # 「パックに入れた」と「節に届いた」は別のことである
+        # （同じ形の配線漏れを過去に3回起こしている）。
+        "reading": _reading_ledger(),
         "reconciliation": reconciliation,
         "falsification": falsification,
         "forward": forward,
