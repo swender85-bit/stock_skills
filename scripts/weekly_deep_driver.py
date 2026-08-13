@@ -178,7 +178,12 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 "indices": pack.get("indices"),
                 "forward_actionable": (pack.get("forward") or {}).get("actionable")}
 
+    if kind == "intake":
+        # 🔴 読書台帳は**価格に依存しない**。打ち切り週でもこの節は出す。
+        return {**meta, "reading": pack.get("reading")}
+
     if kind == "reconcile":
+        # 節1 は保有の記述状態（V0）も書く。`reconciliation.description` に入っている。
         return {**meta, "reconciliation": pack.get("reconciliation")}
 
     if kind == "belief":
@@ -187,7 +192,9 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 "falsification": pack.get("falsification"),
                 "primary_filings": pack.get("primary_filings"),
                 "holdings_overview": [_slim_holding(h)
-                                      for h in pack.get("holdings") or []]}
+                                      for h in pack.get("holdings") or []],
+                # 系譜の根（V5）と概念の健全性（V4）。**価格に依存しない材料。**
+                "reading_genealogy": (pack.get("reading") or {}).get("genealogy")}
 
     if kind == "forward":
         ext = pack.get("external_views") or {}
@@ -329,6 +336,7 @@ def slice_pack(pack: dict, section: dict) -> dict:
     if kind == "limits":
         # 系譜サマリを書く節。一次観測が何件あったかがここの中身になる。
         return {**meta,
+                "reading": pack.get("reading"),
                 "vol_calibration": pack.get("vol_calibration"),
                 "positions_assumptions": pack.get("positions_assumptions"),
                 "primary_filings": {
@@ -475,10 +483,22 @@ def build_sections(pack: dict) -> list[dict]:
          "heading": "## 7. 監査 — 執行と模型の健全性",
          "spec": ("仕様の「### 7. 監査」に従って書く。"
                   "累積差分（4週・13週）の緩慢な変化を必ず見る。"
-                  "材料が薄ければ数行で終えてよい。"),
+                  "材料が薄ければ数行で終えてよい。"
+                  "**偏食監査（`reading.audit`）をここに含める。**"
+                  "最小サンプル未達の指標は値を出さず『蓄積中(N/M件)』とだけ書く。"
+                  "禁止表現: 『〜すべきです』『〜できていません』『偏っています』、目標値の提示。"),
          "needs_body": True},
+        {"id": "intake", "kind": "intake", "order": 92,
+         "heading": "## 8. 今週の取り込み",
+         "spec": ("材料は `reading`。**取り込み0件でも必ず1行出す**（折り畳まない）。"
+                  "取り込みが止まっていることは、この層における最も重要な故障だから。"
+                  "件数・provenance の内訳・情報遅延の中央値・概念の更新・"
+                  "thesis 草稿の提案を書く。"
+                  "🔴 vault が読めなかった場合は『取り込み0件』ではなく"
+                  "**『読書台帳を読めなかった』**と書く。"),
+         "needs_body": False},
         {"id": "limits", "kind": "limits", "order": 95,
-         "heading": "## 8. 前提と限界 / 根拠の系譜",
+         "heading": "## 9. 前提と限界 / 根拠の系譜",
          "spec": "仕様の「### 8. 前提と限界 + 系譜サマリ」に従って書く。",
          "needs_body": True},
         {"id": "verdict", "kind": "verdict", "order": 10,

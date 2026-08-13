@@ -639,6 +639,31 @@ def _safe_external_views(holdings: list[dict]) -> dict:
 MIN_PRICE_COVERAGE = th("data_quality", "min_price_coverage", 0.7)
 
 
+def _reading_ledger() -> dict:
+    """読書台帳・概念層・偏食監査（読書台帳仕様 v2 V6）。
+
+    🔴 **この層は価格に依存しない。** 打ち切り週でも出力する。
+    市場データが全滅した週に唯一無傷で価値を出せる層であり、
+    「市場データが無いので分析しない」は「人間が何を読んだかも報告しない」を意味しない。
+    """
+    out: dict = {"available": False}
+    try:
+        from src.core.reading import diet_audit, genealogy, vault
+
+        health = vault.health()
+        out = {
+            "available": bool(health.get("available")),
+            "vault": health,
+            "audit": diet_audit.audit(),
+            "genealogy": genealogy.report(),
+        }
+    except Exception as exc:
+        out = {"available": False,
+               "reason": f"読書台帳を読めませんでした（{type(exc).__name__}: {exc}）。"
+                         "『取り込みが0件』ではありません。"}
+    return out
+
+
 def _data_quality(holdings: list[dict], network: Optional[dict] = None) -> dict:
     """このパックでレポートを書いてよいかを判定する。
 
@@ -1122,6 +1147,7 @@ def build_portfolio_briefing(
             # **これが悪いパックからレポートを書かせない**ための判定材料。
             "network": network,
             "data_quality": _data_quality(holdings, network),
+            "reading": _reading_ledger(),
         },
         "reconciliation": reconciliation,
         "falsification": falsification,

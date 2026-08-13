@@ -594,6 +594,25 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `build_primary_section(symbols: list[str], days: int=30, limit_per_symbol: int=5, today: Optional[date]=None, persist: bool=False) -> dict` — 菫晄怏驫俶氛縺ｮ荳谺｡髢狗､ｺ繧偵∪縺ｨ繧√ｋ�ｼ医ヶ繝ｪ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕ｨ�ｼ峨�
 - `source_status() -> dict` — 荳谺｡諠�蝣ｱ貅舌′菴ｿ縺医ｋ迥ｶ諷九°繧剃ｸ隕ｧ縺吶ｋ�ｼ郁ｨｺ譁ｭ逕ｨ�ｼ峨�
 
+### src.core.reading.concepts
+
+讎ょｿｵ螻､�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 隨ｬ3驛ｨ�ｼ俄� 驫俶氛縺ｮ豁ｻ繧定ｶ�縺医※谿九ｋ遏･隴倥�
+
+- `slug(name: str) -> str`
+- `build(*, name: str, category: str, body: str, counterexample: str, aliases: Optional[list]=None, applies_to: Optional[list]=None, sources: Optional[list]=None, related_concepts: Optional[list]=None, is_assumption: bool=False, open_questions: Optional[str]=None) -> dict` — 讎ょｿｵ繝壹�ｼ繧ｸ縺ｮ frontmatter + 譛ｬ譁�繧堤ｵ�縺ｿ遶九※繧九�
+- `save(concept: dict, config: Optional[dict]=None) -> str` — 讎ょｿｵ繝壹�ｼ繧ｸ繧� vault 縺ｸ譖ｸ縺上よ里蟄倥′縺ゅｌ縺ｰ蜀�螳ｹ繧貞ｷｮ縺玲崛縺医ｋ�ｼ域ｦょｿｵ縺ｯ邱ｨ髮�蜿ｯ�ｼ峨�
+- `load_all(config: Optional[dict]=None) -> list` — vault 荳翫�ｮ蜈ｨ讎ょｿｵ縲Ａ_archive/` 縺ｯ蜷ｫ繧√↑縺��ｼ亥ｻ�豁｢貂医∩縺ｯ讀懃ｴ｢蟇ｾ雎｡螟厄ｼ峨�
+- `find_similar(name: str, existing: Optional[list]=None, config: Optional[dict]=None) -> list` — 霑代＞讎ょｿｵ繧呈爾縺吶�**菴懈�仙燕縺ｫ蠢�縺壼他縺ｶ縲�**
+- `count_guidance(n: int) -> dict`
+- `success_rate(concept: dict) -> Optional[float]`
+- `next_confidence(concept: dict) -> dict` — 騾ｱ谺｡隧穂ｾ｡縺ｧ縺ｮ閾ｪ蜍暮�ｷ遘ｻ繧呈ｱｺ繧√ｋ縲�**蟒�豁｢縺ｯ霑斐＆縺ｪ縺�縲�**
+- `usable_as_constraint(concept: dict) -> dict` — plan-check 縺ｮ蛻ｶ邏�縺ｨ縺励※菴ｿ縺医ｋ縺九�
+- `audit(config: Optional[dict]=None) -> dict` — 讎ょｿｵ螻､縺ｮ蛛･蜈ｨ諤ｧ縲るｱ谺｡繝ｬ繝昴�ｼ繝育ｯ2縺ｧ菴ｿ縺�縲�
+
+#### class ConceptError
+讎ょｿｵ縺ｮ逋ｻ骭ｲ繝ｻ譖ｴ譁ｰ縺ｮ螟ｱ謨励�**謠｡繧頑ｽｰ縺輔↑縺�縲�**
+
+
 ### src.core.reading.diet_audit
 
 蛛城｣溽屮譟ｻ�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 隨ｬ4驛ｨ�ｼ俄� 5謖�讓吶�
@@ -616,6 +635,15 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `watch_only() -> list`
 - `extract(text: str, max_entities: int=12) -> dict` — 譛ｬ譁�縺九ｉ驫俶氛繧呈歓蜃ｺ縺吶ｋ縲�
 - `held_symbols(config: Optional[dict]=None) -> list` — 迴ｾ蝨ｨ縺ｮ菫晄怏驫俶氛�ｼ域ｭ｣隕上す繝ｳ繝懊Ν�ｼ峨ょ￥鬟溽屮譟ｻ縺ｮ蛻�蟄舌↓菴ｿ縺�縲�
+
+### src.core.reading.genealogy
+
+邉ｻ隴懊�ｮ譬ｹ�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 V5�ｼ俄� thesis 繧貞慍髱｢縺ｫ謗･邯壹☆繧九�
+
+- `classify_thesis(thesis: dict, sources_by_id: dict) -> dict` — 1縺､縺ｮ thesis 縺ｮ邉ｻ隴懃憾諷九�
+- `audit_theses(theses: Optional[list]=None, config: Optional[dict]=None) -> dict` — 蜈ｨ thesis 縺ｮ邉ｻ隴懃憾諷九�
+- `assumption_concentration(theses: Optional[list]=None, config: Optional[dict]=None) -> dict` — thesis 縺御ｾ晄侠縺吶ｋ讎ょｿｵ縺ｮ髮�荳ｭ蠎ｦ�ｼ亥燕謠千ｩｺ髢滴HI�ｼ峨�
+- `report(config: Optional[dict]=None) -> dict` — 遽2縺ｫ霈峨○繧狗ｳｻ隴懊し繝槭Μ縲�
 
 ### src.core.reading.ingest
 
