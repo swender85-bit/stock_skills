@@ -1,0 +1,125 @@
+# provenance の自動判定規則（読書台帳仕様 v2 第2部 2-4）
+#
+# 🔴 **provenance の自己申告を認めない。**
+# 本文に「これは公式資料です」と書いてある個人ブログを一次資料にしない。
+# 誤って一次資料に分類すると、深度0の錨として扱われ、系譜監査が無意味になる。
+# 逆方向の誤りは、不当に軽視されるだけで済む。
+#
+# したがって **不明なものは最も深い側（個人発信・深度2）に倒す。**
+#
+# 判定はドメイン（URL のホスト部）とパスに対して上から順に行い、最初に当たった規則を採用する。
+
+# --- 一次資料（深度0）: 発行体または公的機関が出した原本 -----------------
+primary:
+  domains:
+    - sec.gov
+    - www.sec.gov
+    - data.sec.gov
+    - edinet-fsa.go.jp
+    - disclosure2.edinet-fsa.go.jp
+    - release.tdnet.info
+    - www.release.tdnet.info
+    - jpx.co.jp
+    - www.jpx.co.jp
+    - boj.or.jp
+    - www.boj.or.jp
+    - federalreserve.gov
+    - www.federalreserve.gov
+    - e-stat.go.jp
+    - www.e-stat.go.jp
+    - stat.go.jp
+    - www.stat.go.jp
+    - bls.gov
+    - www.bls.gov
+    - ecb.europa.eu
+  # 企業サイトの IR パス。ドメインは問わずパスで判定する
+  path_patterns:
+    - "/ir/"
+    - "/investor"
+    - "/investors"
+    - "/shareholder"
+    - "/corporate/ir"
+    - "/株主"
+
+# --- 業者資料（深度1）: 金融機関・調査会社が作成した分析 ------------------
+vendor:
+  domains:
+    - nomura.co.jp
+    - daiwa.jp
+    - smbcnikko.co.jp
+    - mizuho-sc.com
+    - rakuten-sec.co.jp
+    - monex.co.jp
+    - sbisec.co.jp
+    - moodys.com
+    - spglobal.com
+    - fitchratings.com
+    - morningstar.com
+    - factset.com
+    - ibisworld.com
+  path_patterns:
+    - "/report/"
+    - "/research/"
+    - "/analyst"
+
+# --- 報道（深度1）--------------------------------------------------------
+press:
+  domains:
+    - nikkei.com
+    - www.nikkei.com
+    - reuters.com
+    - www.reuters.com
+    - bloomberg.com
+    - www.bloomberg.com
+    - wsj.com
+    - ft.com
+    - asahi.com
+    - yomiuri.co.jp
+    - mainichi.jp
+    - sankei.com
+    - toyokeizai.net
+    - diamond.jp
+    - itmedia.co.jp
+    - impress.co.jp
+    - eetimes.jp
+    - nikkeibp.co.jp
+    - cnbc.com
+    - marketwatch.com
+    - barrons.com
+    - finance.yahoo.com
+    - yahoo.co.jp
+
+# --- 個人発信（深度2）----------------------------------------------------
+personal:
+  domains:
+    - youtube.com
+    - www.youtube.com
+    - youtu.be
+    - x.com
+    - twitter.com
+    - note.com
+    - substack.com
+    - medium.com
+    - qiita.com
+    - zenn.dev
+    - hatenablog.com
+    - ameblo.jp
+    - reddit.com
+    - 5ch.net
+
+# --- 書籍・教科書（深度0〜1）---------------------------------------------
+#
+# 一般法則を述べる部分（複利の数学・会計の定義）は深度0の性質を持つ。
+# 特定企業・特定時期を論じる部分は二次情報である。
+# 取り込み時に選択させ、既定は1とする。
+book:
+  # PDF 本文にこれらを含めば書籍とみなす
+  markers:
+    - "ISBN"
+    - "isbn"
+    - "第1版"
+    - "初版"
+
+# --- 既定 ---------------------------------------------------------------
+# 上記のいずれにも該当しない場合。**最も保守的な側に倒す。**
+default: 個人発信

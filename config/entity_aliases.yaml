@@ -1,0 +1,85 @@
+# エンティティ解決（名寄せ）— 読書台帳仕様 v2 第2部 2-5
+#
+# 表記ゆれを解かないと `entities` が機能せず、偏食監査が壊れる。
+#
+# 🔴 設計上の注意
+#
+# 1. **口座区分を entities に含めない。** 2802.T は特定口座とNISA口座で2ポジション
+#    あるが、読んだ記事は口座に紐づかない。entities は銘柄レベル、ポジションは口座レベル。
+#    混同するとダブルカウントする。
+# 2. **FANG+ は投資信託であり ticker が無い。** 内部シンボル FANGPLUS を割り当て、
+#    代理指数 ^NYFANG とは別扱いにする。週次レポートで代理値を使ったのと同じ混同を
+#    vault に持ち込まない。
+# 3. **レバレッジETFの entity は原資産とリンクする。** SOXL に関する記事は半導体
+#    セクターの記事でもある。derives_from により「TQQQ について読んでいない」が
+#    「ナスダックについて読んでいない」と同義でないことを扱える。
+# 4. 未解決は捨てずに `entities_unresolved` に残し、週次で人間が確認する。
+
+aliases:
+  QCOM:
+    - Qualcomm
+    - Qualcomm Inc
+    - QUALCOMM
+    - クアルコム
+    - クワルコム
+  MDT:
+    - Medtronic
+    - Medtronic plc
+    - メドトロニック
+  2737.T:
+    - "2737"
+    - トーメンデバイス
+    - Tomen Devices
+    - トーメンデバイス株式会社
+  2802.T:
+    - "2802"
+    - 味の素
+    - 味の素株式会社
+    - Ajinomoto
+    - アジノモト
+  9843.T:
+    - "9843"
+    - ニトリ
+    - ニトリHD
+    - ニトリホールディングス
+    - Nitori
+  SOXL:
+    - Direxion Daily Semiconductor Bull 3X
+    - 半導体3倍
+    - 半導体3x
+  TECL:
+    - Direxion Daily Technology Bull 3X
+    - テック3倍
+  TQQQ:
+    - ProShares UltraPro QQQ
+    - QQQ3倍
+    - ナスダック3倍
+  FANGPLUS:
+    - iFreeNEXT FANG+
+    - iFreeNEXT FANG+インデックス
+    - FANG+
+    - ファングプラス
+    - FANGプラス
+
+# レバレッジETF・投信 → 原資産。
+# 「TQQQ について読んでいない」と「ナスダックについて読んでいない」は別の事実である。
+derives_from:
+  SOXL: SOX
+  TECL: XLK
+  TQQQ: NDX
+  FANGPLUS: NYFANG
+
+# 代理指数。**保有そのものと混同しない。**
+# 週次レポートは FANG+ の値に ^NYFANG を代理として使ったことがある。
+# vault では別 entity として扱い、混同を持ち込まない。
+proxies:
+  FANGPLUS: "^NYFANG"
+
+# 保有していないが監視対象（ETF経由の間接曝露など）。
+# 偏食監査の「保有偏重率」の分子には**含めない**。
+watch_only:
+  - NVDA
+  - AVGO
+  - AMD
+  - INTC
+  - TSM

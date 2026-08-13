@@ -57,11 +57,29 @@ def _is_source_tree(path: str) -> bool:
     return "src" in parts or "tests" in parts
 
 
+#: 読書台帳の raw は**追記のみ**。既存ファイルの編集・削除を Claude に許さない。
+#: 新規作成は ingest 経由で行われるため、ここでブロックされるのは
+#: 「既に存在する原本への上書き」だけである（呼び出し側が実在を確認する）。
+#: 仕様 2-7: 「文章でのお願いに頼らない」— Permission と二重で防ぐ。
+_READING_RAW = os.path.normcase(os.sep + "raw" + os.sep)
+_READING_INDEX = os.path.normcase(os.sep + ".index" + os.sep)
+
+
+def is_reading_ledger(path: str) -> bool:
+    """読書台帳の原本か（vault 配下の raw/ と .index/）。"""
+    p = _abs(path)
+    if os.path.normcase("iclouddrive") not in p:
+        return False
+    return _READING_RAW in p or _READING_INDEX in p
+
+
 def is_protected(path: str) -> bool:
     if not path:
         return False
     p = _abs(path)
     if p.endswith(PROTECTED_SUFFIXES):
+        return True
+    if is_reading_ledger(p):
         return True
     if _is_source_tree(p):
         return False

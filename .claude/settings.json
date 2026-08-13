@@ -9,7 +9,10 @@
       "Read(./**/*.key)",
       "Bash(rm -rf:*)",
       "Bash(git push --force:*)",
-      "Bash(git push -f:*)"
+      "Bash(git push -f:*)",
+      "Edit(C:/Users/swend/iCloudDrive/swender/投資記録/raw/**)",
+      "Write(C:/Users/swend/iCloudDrive/swender/投資記録/raw/**)",
+      "Edit(C:/Users/swend/iCloudDrive/swender/投資記録/.index/**)"
     ],
     "ask": [
       "Edit(./data/**)",
@@ -26,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/guard_protected.py",
+            "command": "python \"C:/Users/swend/stock_skills/scripts/hooks/guard_protected.py\"",
             "timeout": 10000
           }
         ]
@@ -38,12 +41,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/verify_after_write.py",
+            "command": "python \"C:/Users/swend/stock_skills/scripts/hooks/verify_after_write.py\"",
             "timeout": 10000
           },
           {
             "type": "command",
-            "command": "python scripts/hooks/eval_prompts_after_edit.py",
+            "command": "python \"C:/Users/swend/stock_skills/scripts/hooks/eval_prompts_after_edit.py\"",
             "timeout": 130000
           }
         ]
