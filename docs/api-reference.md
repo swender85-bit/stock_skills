@@ -399,6 +399,7 @@ What-If portfolio simulation (KIK-376, KIK-451).
 - `aggregate(positions: list[dict]) -> dict[str, dict]` — 蜷御ｸ驫俶氛�ｼ郁､�謨ｰ蜿｣蠎ｧ�ｼ峨ｒ1縺､縺ｫ譚溘�ｭ繧九�
 - `classify_quantity_diff(model_shares: Optional[float], broker_shares: Optional[float], value_per_share_jpy: Optional[float]=None, share_tolerance: float=..., value_tolerance_jpy: float=...) -> dict` — 謨ｰ驥丞ｷｮ蛻�繧貞��鬘槭☆繧九�
 - `reconcile(model_positions: list[dict], broker_snapshots: list[dict], *, values_jpy: Optional[dict[str, float]]=None, total_jpy: Optional[float]=None, share_tolerance: float=..., value_tolerance_jpy: float=..., check_intent: bool=True) -> dict` — 荳臥せ辣ｧ蜷医ｒ螳溯｡後☆繧九�
+- `describe_positions(model: dict, values: dict, total_jpy: Optional[float]) -> dict` — 菫晄怏縺ｮ險倩ｿｰ迥ｶ諷九ｒ4蛻�鬘槭☆繧具ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 縺ｮ V0�ｼ峨�
 - `orphan_burden(orphans: list[dict]) -> Optional[float]` — 蟄､蜈舌�昴ず繧ｷ繝ｧ繝ｳ縺瑚ｩ穂ｾ｡鬘阪↓蜊繧√ｋ豈皮紫�ｼ�%�ｼ峨�
 - `apply_corporate_actions(config: dict, result: dict) -> tuple[dict, list[str]]` — 蛻�蜑ｲ/菴ｵ蜷医→蛻､螳壹＆繧後◆蟾ｮ蛻�縺縺第ｨ｡蝙九�ｮ譬ｪ謨ｰ繧定｣懈ｭ｣縺吶ｋ縲�
 - `run_reconciliation(holdings_config: Optional[dict]=None, *, report_data: Optional[dict]=None, sources: Optional[list[str]]=None, csv_path: Optional[str]=None, autostart_opend: bool=True, check_intent: bool=True) -> dict` — 險ｭ螳壹�ｮ隱ｭ縺ｿ霎ｼ縺ｿ縺九ｉ繝悶Ο繝ｼ繧ｫ繝ｼ蜿門ｾ励�ｻ辣ｧ蜷医∪縺ｧ繧�1譛ｬ縺ｧ陦後≧縲�
