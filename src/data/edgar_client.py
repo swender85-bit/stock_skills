@@ -64,6 +64,16 @@ from typing import Any, Optional
 
 import requests
 
+from src.core.env import load_env
+
+# 🔴 モジュール読み込み時に一度だけ .env を反映する。
+# これが無かった間、SEC_EDGAR_UA は .env に設定済みでも
+# 「先に finnhub/grok を import したプロセスでだけ効く」という
+# インポート順依存になっていた（2026-08-11 発見）。
+# 関数内で呼ぶと実行時の環境変数削除を打ち消してしまうので、
+# ここで1回だけ呼ぶ。
+load_env()
+
 _TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
 _SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 _CONCEPT_URL = "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{tag}.json"

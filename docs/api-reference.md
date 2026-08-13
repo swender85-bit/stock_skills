@@ -58,6 +58,13 @@ Decision package: 蛻､譁ｭ繝代ャ繧ｱ繝ｼ繧ｸ縺ｮ讒狗ｯ峨��
 - `from_dict(data: Optional[dict]) -> 'InformationBoundary'`
 - `overlaps() -> list[str]` — 蜷御ｸ繝ｩ繝吶Ν縺瑚､�謨ｰ蛹ｺ蛻�縺ｫ迴ｾ繧後※縺�縺ｪ縺�縺区､懈渊縺吶ｋ(謗剃ｻ匁ｧ縺ｮ讀懆ｨｼ)縲�
 
+### src.core.env
+
+`.env` 縺ｮ隱ｭ縺ｿ霎ｼ縺ｿ繧剃ｸ邂�謇縺ｫ髮�邏�縺吶ｋ縲�
+
+- `load_env(force: bool=False) -> bool` — 繝励Ο繧ｸ繧ｧ繧ｯ繝育峩荳九�ｮ `.env` 繧堤腸蠅�螟画焚縺ｸ隱ｭ縺ｿ霎ｼ繧縲�
+- `status() -> dict` — `.env` 繧定ｪｭ繧√◆縺九ょ他縺ｳ蜃ｺ縺怜�ｴ縺後手ｨｭ螳壹＠縺溘�ｮ縺ｫ蜉ｹ縺九↑縺�縲上↓豌励▼縺代ｋ繧医≧縺ｫ縲�
+
 ### src.core.health.community
 
 Community concentration analysis for portfolio health checks (KIK-549, KIK-576).

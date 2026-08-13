@@ -51,6 +51,16 @@ from typing import Any, Optional
 
 import requests
 
+from src.core.env import load_env
+
+# 🔴 モジュール読み込み時に一度だけ .env を反映する。
+# これが無かった間、SEC_EDGAR_UA は .env に設定済みでも
+# 「先に finnhub/grok を import したプロセスでだけ効く」という
+# インポート順依存になっていた（2026-08-11 発見）。
+# 関数内で呼ぶと実行時の環境変数削除を打ち消してしまうので、
+# ここで1回だけ呼ぶ。
+load_env()
+
 _DOCS_URL = "https://api.edinet-fsa.go.jp/api/v2/documents.json"
 _DOC_URL = "https://api.edinet-fsa.go.jp/api/v2/documents/{doc_id}"
 _VIEW_URL = "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}"
