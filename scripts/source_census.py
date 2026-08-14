@@ -15,10 +15,14 @@
 この点検は各情報源を**新しいプロセスで**叩き、次の3つを厳密に分ける。
 
 - ``live``       : 実際に値が返った
-- ``configured`` : 資格情報はあるが応答が無い（回線・権限・相手側）
-- ``dark``       : 資格情報が見えていない（＝設定漏れ、または読み込み漏れ）
+- ``configured`` : 資格情報はあるが、可否をこの場で確認していない／確認できなかった
+- ``dark``       : **確実に使えない**（資格情報が見えていない、または相手に拒否された）
 
-``dark`` と ``configured`` を混ぜないこと。前者は自分の不備、後者は相手の問題である。
+判定の軸は「資格情報の有無」ではなく **「今この瞬間に使えるか」** である。
+2026-08-13 に `XAI_API_KEY` が設定済みのまま全リクエストが 403 で拒否されていた
+（チームにクレジットが無い）ため、キーの有無だけを見る旧実装は
+**使えない情報源を 🟡 で通し、「黙って死んでいるもの」の一覧から漏らしていた。**
+拒否は待っても直らないので ``dark`` に置き、直し方を必ず添える。
 
 使い方::
 
@@ -141,12 +145,44 @@ def probe_edinet(offline: bool) -> dict:
 
 
 def probe_grok(offline: bool) -> dict:
+    """🔴 **「キーがある」と「使える」は別。**
+
+    最小のリクエスト（``max_tokens=1``）を1回だけ投げて実際の可否を見る。
+    拒否されれば課金されず、通っても1トークン分なので、この確認は安全である。
+    ここを実叩きにしないと、クレジット切れのキーが 🟡 のまま残り、
+    Grok に依存する経路（trending / --auto-theme / critics / market-research）が
+    全部死んでいることに気づけない。
+    """
     key = os.environ.get("XAI_API_KEY", "").strip()
     if not key:
         return _result("grok", "discourse", DARK, "XAI_API_KEY が見えていません",
                        ".env に XAI_API_KEY を置く")
-    return _result("grok", "discourse", CONFIGURED,
-                   f"キーあり（{len(key)}文字）。実叩きは課金のためここでは行わない")
+    if offline:
+        return _result("grok", "discourse", CONFIGURED, f"キーあり（{len(key)}文字・未確認）")
+    try:
+        import requests
+
+        res = requests.post(
+            "https://api.x.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "grok-4-1-fast-non-reasoning", "max_tokens": 1,
+                  "messages": [{"role": "user", "content": "hi"}]},
+            timeout=20)
+    except Exception as exc:
+        # 回線側で落ちた場合は「使えない」とは言い切れない。dark に落とさない。
+        return _result("grok", "discourse", CONFIGURED,
+                       f"キーはあるが確認できず（{type(exc).__name__}）")
+    if res.status_code == 200:
+        return _result("grok", "discourse", LIVE, "応答あり")
+    detail = ""
+    try:
+        detail = str((res.json() or {}).get("error") or "")[:120]
+    except Exception:
+        detail = res.text[:120]
+    fix = ("https://console.x.ai でクレジットを購入する"
+           if res.status_code in (402, 403) else "キーの権限を確認する")
+    return _result("grok", "discourse", DARK,
+                   f"HTTP {res.status_code}: {detail}", fix)
 
 
 def probe_neo4j(offline: bool) -> dict:
