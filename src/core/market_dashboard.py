@@ -286,25 +286,40 @@ def get_yield_curve(client=None) -> dict:
     else:
         curve_status = "不明"
 
-    # 10Y history (1 month)
-    history_10y = []
-    try:
-        hist = client.get_price_history("^TNX", period="1mo")
-        if hist is not None and not hist.empty:
-            closes = hist["Close"].dropna()
-            step = max(1, len(closes) // 5)
-            for i in range(0, len(closes), step):
-                dt = closes.index[i]
-                history_10y.append({
-                    "date": dt.strftime("%m/%d") if hasattr(dt, "strftime") else str(dt)[:5],
-                    "rate": round(float(closes.iloc[i]), 3),
-                })
-    except Exception:
-        pass
+    # 10Y / 30Y history (1 month)
+    #
+    # 30Y も取るのは改善6のため。レバレッジETFに効くのは短期金利ではなく長期金利で、
+    # 「政策金利予想が緩んだ日に30年債が19年ぶり高水準」という日を捉えるには
+    # 30年債の1ヶ月変化が要る。10Yだけ見ていると、その日を「緩和」と誤判定する。
+    histories: dict[str, list] = {}
+    changes: dict[str, Optional[float]] = {}
+    for tenor, symbol in (("10Y", "^TNX"), ("30Y", "^TYX")):
+        rows: list[dict] = []
+        change = None
+        try:
+            hist = client.get_price_history(symbol, period="1mo")
+            if hist is not None and not hist.empty:
+                closes = hist["Close"].dropna()
+                step = max(1, len(closes) // 5)
+                for i in range(0, len(closes), step):
+                    dt = closes.index[i]
+                    rows.append({
+                        "date": dt.strftime("%m/%d") if hasattr(dt, "strftime") else str(dt)[:5],
+                        "rate": round(float(closes.iloc[i]), 3),
+                    })
+                if len(closes) >= 2:
+                    change = round(float(closes.iloc[-1]) - float(closes.iloc[0]), 3)
+        except Exception:
+            pass
+        histories[tenor] = rows
+        changes[tenor] = change
 
     return {
         "yields": yields,
         "spread_10y_3m": spread_10y_3m,
         "curve_status": curve_status,
-        "history_10y": history_10y,
+        "history_10y": histories["10Y"],
+        "history_30y": histories["30Y"],
+        # 1ヶ月変化（%ポイント）。取れなければ None = 「変化なし」ではなく「取れなかった」。
+        "change_1m": {k: v for k, v in changes.items()},
     }

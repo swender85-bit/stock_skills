@@ -112,11 +112,85 @@ def _build_dividend_history_from_actions(
         return [], []
 
 
+#: 直近の取得失敗理由。**「データが無い」と「取れなかった」を区別するため。**
+#: 2026-08-08 の週次は price=None / error=None という状態で出力され、
+#: レポートが「取得できず」としか書けなかった。理由を残せば原因まで書ける。
+_FETCH_ERRORS: dict[str, str] = {}
+
+
+def _record_fetch_error(symbol: str, reason: str) -> None:
+    _FETCH_ERRORS[symbol] = reason
+
+
+def last_fetch_error(symbol: str) -> Optional[str]:
+    """その銘柄の直近の取得失敗理由。成功していれば None。"""
+    return _FETCH_ERRORS.get(symbol)
+
+
+def clear_fetch_errors() -> None:
+    _FETCH_ERRORS.clear()
+
+
+def _resolve_minimal(symbol: str) -> Optional[dict]:
+    """`info` が取れなかったときの最後の手段。
+
+    価格だけでも取れれば、レポートは「値動きが不明」ではなく
+    「値は取れたが指標は取れなかった」と書ける。**その差は大きい。**
+
+    どの経路で取れたかを `price_source` / `resolution` に残し、
+    **予備で取った値を一次経路の値のように見せない。**
+    """
+    try:
+        from src.data.resolver import resolve_history, resolve_price
+    except Exception:
+        return None
+
+    price = resolve_price(symbol)
+    if not price.get("available"):
+        _record_fetch_error(
+            symbol,
+            f"全経路で価格を取得できませんでした（試行: "
+            f"{', '.join(a['source'] for a in price.get('attempts') or [])}）")
+        return None
+
+    result: dict = {
+        "symbol": symbol,
+        "price": price["value"],
+        "price_source": price["source"],
+        "resolution": {
+            "price": {"source": price["source"],
+                      "fallback_used": price.get("fallback_used"),
+                      "attempts": price.get("attempts")},
+        },
+        "degraded": True,
+        "degraded_note": (
+            f"基本情報が取得できず、価格のみ {price['source']} から復旧しました。"
+            "PER・成長率などの指標は**取得できていません**（0ではありません）。"),
+    }
+
+    # 52週レンジくらいは系列から作れる。指標が全滅した週でも過熱は測れる。
+    hist = resolve_history(symbol, period="1y")
+    if hist.get("available"):
+        try:
+            closes = hist["value"]["Close"].dropna()
+            result["fifty_two_week_high"] = float(closes.max())
+            result["fifty_two_week_low"] = float(closes.min())
+            result["resolution"]["history"] = {"source": hist["source"]}
+        except Exception:
+            pass
+
+    _sanitize_anomalies(result)
+    return result
+
+
 def get_stock_info(symbol: str) -> Optional[dict]:
     """Fetch basic stock information for a single symbol.
 
     Returns a dict with standardized keys, or None if the fetch fails entirely.
     Individual fields that are unavailable are set to None.
+
+    一時失敗はリトライする（`_net.with_retry`）。ネットワークが落ちている間の
+    1回の失敗を「今週は取得不能」として確定させないため。
     """
     # Check cache first
     cached = _read_cache(symbol)
@@ -125,9 +199,27 @@ def get_stock_info(symbol: str) -> Optional[dict]:
 
     try:
         ticker = yf.Ticker(symbol)
-        info = ticker.info
+
+        # 一時失敗を確定にしない (2026-08-08 の週次全滅の再発防止)。
+        # yfinance は通信が落ちていると**例外ではなく空 dict** を返すことがあるので、
+        # 例外だけでなく「価格が無い」ことも再試行の対象にする。
+        from src.data.yahoo_client._net import with_retry
+
+        info, fetch_error = with_retry(
+            lambda: ticker.info,
+            label=f"{symbol} の基本情報",
+            is_empty=lambda d: not d or d.get("regularMarketPrice") is None,
+        )
 
         if not info or info.get("regularMarketPrice") is None:
+            # ⚠️ **ここで諦めない。** 運用ルール:
+            #   「取得できなかったら他のあらゆる手段を講じて取得できるまでトライする」
+            # `info` が落ちても fast_info / download / finnhub が通ることがある。
+            # 実測で確認済みの経路を順に試し、**全滅して初めて** None を返す。
+            resolved = _resolve_minimal(symbol)
+            if resolved is not None:
+                return resolved
+            _record_fetch_error(symbol, fetch_error or "価格が取得できませんでした")
             return None
 
         result = {

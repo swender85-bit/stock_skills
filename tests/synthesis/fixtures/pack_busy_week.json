@@ -1,0 +1,148 @@
+{
+  "pack_version": 2,
+  "mode": "portfolio",
+  "_fixture_note": "要対応週。決算集中・政策カバレッジの穴・反証接近・四半期YoYスパイク（±300%超）を含む。",
+  "meta": {
+    "as_of": "2026-08-01",
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "holdings_source": "rakuten_csv",
+    "holdings_import": {"type": "assetbalance", "exported_at": "2026-07-30", "file": "assetbalance(all)_20260730.csv"},
+    "fx_rate": 161.4,
+    "warnings": []
+  },
+  "information": {
+    "verdict": "要対応週",
+    "quiet": false,
+    "actionable": [
+      {"priority": 1, "kind": "forward", "title": "決算集中 2銘柄に対応策がありません", "detail": "味の素・ニトリの2銘柄に決算ギャップ時の対応策がありません。"},
+      {"priority": 2, "kind": "belief", "title": "反証条件が接近中 1件", "detail": "ニトリの営業利益率が反証ラインに接近しています。"},
+      {"priority": 3, "kind": "forward", "title": "イベント集中度が警告水準", "detail": "保有の14.7%が同一週に決算を通過します。"}
+    ],
+    "actionable_count": 3,
+    "changed_count": 6,
+    "checked_count": 44,
+    "folded_count": 5,
+    "guidance": "翌週の条件付き政策を確定させてください。"
+  },
+  "reconciliation": {
+    "as_of": "2026-08-01",
+    "status": "ok",
+    "blocking": false,
+    "reconcilable": true,
+    "independently_verified": true,
+    "model_source": "rakuten_csv(2026-07-30) / 取り込み前に reconcile 済み",
+    "counts": {"model": 3, "broker": 3, "matched": 3, "diffs": 0, "ghosts": 0, "unrecorded": 0, "unverified": 0, "orphans": 0},
+    "diffs": [],
+    "unknown_diffs": [],
+    "ghosts": [],
+    "unrecorded": [],
+    "unverified": [],
+    "corporate_actions": [],
+    "orphans": [],
+    "orphan_burden_pct": 0.0,
+    "messages": ["口座と模型は一致しています（独立検証済み）。"]
+  },
+  "falsification": {
+    "falsified": [],
+    "near": [{"symbol": "9843.T", "name": "ニトリホールディングス", "condition": "operating_margin < 12", "actual": 12.6, "distance": 0.6}],
+    "unchecked": [{"symbol": "QCOM", "condition": "operating_cf < 0", "reason": "営業CFが取得できませんでした。"}],
+    "missing": [{"symbol": "SOXL", "name": "SOXL", "reason": "反証条件が未定義です。"}],
+    "intact": 1,
+    "checked": 3,
+    "total": 4,
+    "note": "反証成立 0件 / 接近 1件 / 未点検 1件 / 未定義 1件"
+  },
+  "forward": {
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "errors": [],
+    "calendar": {
+      "range": "2026-08-03/2026-08-09",
+      "as_of": "2026-08-01",
+      "events": [
+        {"kind": "earnings", "date": "2026-08-06", "day_label": "木 8/6", "symbol": "2802.T", "name": "味の素", "title": "味の素 決算", "weight_pct": 10.9, "source": "yfinance", "fetched_at": "2026-08-01T21:00:00+00:00"},
+        {"kind": "earnings", "date": "2026-08-06", "day_label": "木 8/6", "symbol": "9843.T", "name": "ニトリホールディングス", "title": "ニトリホールディングス 決算", "weight_pct": 4.4, "source": "yfinance", "fetched_at": "2026-08-01T21:00:00+00:00"},
+        {"kind": "fomc", "date": "2026-08-05", "day_label": "水 8/5", "title": "FOMC 政策金利発表", "top_range": "3.75-4.00", "top_prob": 0.82, "source": "moomoo", "cached_age_hours": null}
+      ],
+      "folded": [],
+      "unavailable_symbols": [],
+      "note": "翌週の確定イベント 3件。"
+    },
+    "concentration": {"available": true, "pct": 15.3, "level": "warning", "message": "保有の15.3%が同一週に決算を通過します。"},
+    "policy_gaps": {
+      "gaps": [
+        {"symbol": "2802.T", "name": "味の素", "date": "2026-08-06", "weight_pct": 10.9, "policies": 0},
+        {"symbol": "9843.T", "name": "ニトリホールディングス", "date": "2026-08-06", "weight_pct": 4.4, "policies": 0}
+      ],
+      "covered": [],
+      "message": "味の素, ニトリホールディングス の2銘柄に、決算ギャップ時の対応策がありません。"
+    },
+    "dividend_drops": [{"symbol": "2802.T", "date": "2026-08-04", "amount": 24.0, "note": "権利落ちの下落は損失ではありません。"}],
+    "monday_outlook": {"available": true, "note": "先物・ADR は予測ではなく市場の織り込み。"},
+    "schedule_changes": [],
+    "triggers": {"available": true, "approaching": [{"symbol": "9843.T", "metric": "price", "op": "<=", "value": 2200, "actual": 2390, "distance": 190}], "met": [], "checked": 6, "message": "トリガー接近 1件。"},
+    "actionable": [{"kind": "policy_gap", "detail": "決算前に政策を確定させてください。"}]
+  },
+  "constraints": {
+    "tax_state": {"realized_pl_jpy": 320000, "recorded": true, "nisa_used_estimate": {"value": 600000, "reliable": false}, "warnings": ["税制設定が確認されていません。"]},
+    "runway_bundle": {"cash_jpy": 10100, "weekly_investable_jpy": 12500, "purpose_assigned": false},
+    "attention": {"holdings": 3, "orphans": 0, "minutes_per_holding": 20, "effective_watch": 3},
+    "loss_harvest": {"available": true, "candidates": [{"symbol": "9843.T", "unrealized_loss_jpy": -375015}]},
+    "liquidity": {"errors": [], "liquidity": {"profiles": [{"symbol": "9843.T", "available": true, "tier": "immediate"}], "trapped": []}},
+    "errors": []
+  },
+  "execution_audit": {
+    "window_days": 90,
+    "executions_available": true,
+    "survival": {"available": true, "total": 20, "executed": 11, "unexecuted": 9, "rate": 0.55},
+    "shortfall": {"available": true, "bps": -48.0},
+    "performance": {"available": true},
+    "reasons": [],
+    "errors": []
+  },
+  "model_audit": {
+    "errors": [],
+    "score": {"available": true, "weeks": 27, "min_weeks": 26, "bias": {"direction": "underestimate_loss", "p_value": 0.03}},
+    "missing_factor": [{"name": "長期金利", "hypothesis": true}]
+  },
+  "week_diff": {"changed": ["9843.T", "QCOM"], "folded": ["2802.T"]},
+  "cumulative_diff": {"available": true, "weeks_4": {"value_change_pct": -3.1}, "weeks_13": {"value_change_pct": -8.4}},
+  "narrative": {"crowding": {"QCOM": {"available": true, "ratio": 2.4, "note": "購入時比2.4倍語られています。"}}},
+  "portfolio": {"total_jpy": 18700000, "cash_jpy": 10100, "total_pl_jpy": 7400000, "pl_pct": 65.6},
+  "holdings": [
+    {"name": "味の素", "symbol": "2802.T", "account": "特定", "shares": 400, "cost_price": 3906.03, "price": 5102, "price_source": "yfinance", "currency": "JPY", "value_jpy": 2040800, "pl_jpy": 478385, "pl_pct": 30.6, "weight_pct": 10.9, "week_change_pct": -1.2, "leverage": 1,
+     "fundamentals": {"per": 21.4, "pbr": 2.9, "roe": 0.14, "revenue_growth": 0.05, "earnings_growth": 0.08, "sector": "Consumer Defensive", "is_etf": false},
+     "technicals": {"last": 5102, "rsi14": 44.0, "percent_b": 0.31, "range_52w_position": 0.48, "sma200_deviation_pct": -2.0, "heat_state": "neutral"},
+     "wow_delta": {"per": -0.6, "rsi14": -5.0}},
+    {"name": "ニトリホールディングス", "symbol": "9843.T", "account": "特定", "shares": 345, "cost_price": 3477.0, "price": 2390, "price_source": "yfinance", "currency": "JPY", "value_jpy": 824550, "pl_jpy": -375015, "pl_pct": -31.3, "weight_pct": 4.4, "week_change_pct": -2.8, "leverage": 1,
+     "fundamentals": {"per": 12.1, "pbr": 1.1, "roe": 0.09, "revenue_growth": -0.02, "earnings_growth": -0.14, "operating_margin": 0.126, "sector": "Consumer Cyclical", "is_etf": false},
+     "technicals": {"last": 2390, "rsi14": 28.5, "percent_b": 0.08, "range_52w_position": 0.05, "sma200_deviation_pct": -18.4, "heat_state": "oversold"},
+     "wow_delta": {"per": -0.4, "rsi14": -6.2}},
+    {"name": "クアルコム", "symbol": "QCOM", "account": "特定", "shares": 85, "cost_price": 186.2588, "price": 175.63, "price_source": "yfinance", "currency": "USD", "value_jpy": 2409000, "pl_jpy": -126969, "pl_pct": -5.0, "weight_pct": 12.9, "week_change_pct": 1.4, "leverage": 1,
+     "fundamentals": {"per": 16.8, "forward_per": 13.2, "pbr": 5.1, "roe": 0.38, "revenue_growth": 0.12, "earnings_growth": 10.43, "sector": "Technology", "is_etf": false,
+       "growth_period_warning": "earnings_growth は四半期YoYで +1043%。前年同期の落ち込みによるスパイクの可能性が高い。年度ベースは growth_annual を参照し、年度基準の数字を主として書くこと。",
+       "growth_annual": {"earnings_growth": 0.21, "revenue_growth": 0.09, "periods": ["FY2025", "FY2024"], "source": "income_stmt"}},
+     "technicals": {"last": 175.63, "rsi14": 55.1, "percent_b": 0.62, "range_52w_position": 0.51, "sma200_deviation_pct": 2.4, "heat_state": "neutral"},
+     "wow_delta": {"per": 0.3, "rsi14": 3.1},
+     "competitors": {"note": "スマホ向けは Apple モデム内製化リスク。", "peers": [{"symbol": "AVGO", "name": "Broadcom Inc.", "per": 64.9, "revenue_growth": 0.479}]}}
+  ],
+  "indices": {},
+  "holding_news": {},
+  "market_news": [],
+  "moomoo": {},
+  "forward_schedule": [],
+  "schedule_status": {
+    "2802.T": {"symbol": "2802.T", "name": "味の素", "fetched": true, "source": "yfinance", "status": "scheduled", "next_earnings": "2026-08-06", "in_next_week": true, "label": "翌週に決算があります。"},
+    "9843.T": {"symbol": "9843.T", "name": "ニトリホールディングス", "fetched": true, "source": "yfinance", "status": "scheduled", "next_earnings": "2026-08-06", "in_next_week": true, "label": "翌週に決算があります。"},
+    "QCOM": {"symbol": "QCOM", "name": "クアルコム", "fetched": true, "source": "yfinance", "status": "none_upcoming", "next_earnings": "2026-10-29", "label": "取得済み。翌週に予定はありません。"}
+  },
+  "projection": {},
+  "scenarios": [],
+  "positions_assumptions": {},
+  "vol_calibration": {"available": true, "entries": []},
+  "monthly_contribution": 50000,
+  "prior_context": {
+    "theses": [{"symbol": "QCOM", "content": "AIデータセンター参入＋スマホ依存低下の多角化。撤退ライン約$158。"}],
+    "concerns": [{"symbol": "9843.T", "content": "円安と国内消費の弱さで採算が悪化している。"}],
+    "lessons": [{"symbol": "", "trigger": "RSI70超で買う", "expected_action": "出来高を確認してから入る"}]
+  }
+}

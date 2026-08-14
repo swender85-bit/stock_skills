@@ -207,6 +207,52 @@ def format_attention(budget: dict) -> str:
     return "\n".join(lines)
 
 
+def format_assumption_conflicts(result: Optional[dict]) -> str:
+    """前提の衝突（改善4）。
+
+    同じ変数の同じ方向に「好機」と「危機」が同居している構造を出す。
+    **その行動を実行する条件が揃った瞬間、原資が毀損する**——資産空間の
+    分散指標（セクター/地域/通貨HHI）はこれを一切検出しない。
+
+    これは制約セクションに置く。行動可能な空間の話であり、機会より先に読ませるため。
+    """
+    if not result:
+        return ""
+
+    conflicts = result.get("conflicts") or []
+    if not conflicts:
+        # 計画の前提が1件も無い状態を「衝突なし」と書くと、測れていないことを
+        # 「問題なし」と誤読させる（§16-1）。
+        if result.get("conflict_detectable") is False:
+            return (
+                "### 前提の衝突\n\n"
+                "⚠️ 計画側の前提（target メモ）が記録されていないため、**衝突を判定できません**。"
+                "『衝突なし』ではありません。\n"
+                "「何を待っているか」（例: 円高¥155で両替）を target メモに残すと、"
+                "その計画と保有が同じ変数で食い違っていないかを毎週点検できます。\n"
+            )
+        return ""
+
+    lines = [
+        "### 前提の衝突",
+        "",
+        "> 資産空間の分散（セクター・地域・通貨HHI）はこれを検出しません。",
+        "> 同方向の集中（通貨の二重ロング）とも別種で、"
+        "**片方の実行が他方を壊す**構造です。",
+        "",
+    ]
+    for c in conflicts:
+        lines.append(f"- 🔴 **{c['variable']} / {c['direction_label']}**")
+        lines.append(f"    {c['message']}")
+        if c.get("plans"):
+            lines.append(f"    待っている前提: {', '.join(c['plans'])}")
+        if c.get("exposed_symbols"):
+            lines.append(f"    影響を受ける保有: {', '.join(c['exposed_symbols'])}")
+        lines.append(f"    確認すること: {c['what_to_check']}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def format_constraints(bundle: dict) -> str:
     """制約セクション全体（第4セクション）をまとめて出す。"""
     parts = [
@@ -215,6 +261,7 @@ def format_constraints(bundle: dict) -> str:
         format_loss_harvest(bundle.get("loss_harvest") or []),
         _format_liquidity(bundle.get("liquidity")),
         format_attention(bundle.get("attention") or {}),
+        format_assumption_conflicts(bundle.get("assumption_space")),
     ]
     return "\n".join(p for p in parts if p)
 

@@ -20,9 +20,12 @@ from src.core.policy.ledger import (
 )
 from src.core.policy.evaluator import (
     NEAR_TRIGGER_RATIO,
+    check_rate_gate,
     evaluate_policy,
     evaluate_trigger,
+    is_entry_policy,
     policy_response,
+    rate_state_from_yield_curve,
     trigger_distance,
 )
 from src.core.policy.deviation import (
@@ -45,9 +48,12 @@ __all__ = [
     "save_policy",
     "validate_trigger",
     "NEAR_TRIGGER_RATIO",
+    "check_rate_gate",
     "evaluate_policy",
     "evaluate_trigger",
+    "is_entry_policy",
     "policy_response",
+    "rate_state_from_yield_curve",
     "trigger_distance",
     "coverage_rate",
     "detect_deviations",

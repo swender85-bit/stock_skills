@@ -102,6 +102,42 @@ class TestProjectPortfolio:
             assert key in result
             assert result[key]["low"] < result[key]["high"]
 
+    def test_quarter_horizon_exists(self):
+        """3ヶ月（決算1〜2回ぶん）。**「短期の次が半年」では粗すぎる。**
+
+        最も意思決定に使う窓がここなので、レンジが無いと
+        「これから」の中期を語る材料が数字の裏付けなしになる。
+        """
+        result = project_portfolio(self._positions())
+        assert "quarter" in result
+        assert result["quarter"]["low"] < result["quarter"]["high"]
+
+    def test_horizon_order_is_monotonic_in_time(self):
+        """表示順が時間順であること（dict の挿入順に依存させない）。"""
+        from src.core.portfolio.projection import HORIZONS, HORIZON_ORDER
+
+        days = [HORIZONS[k][1] for k in HORIZON_ORDER]
+        assert days == sorted(days)
+        assert set(HORIZON_ORDER) == set(HORIZONS)
+
+    def test_short_and_long_labels_agree(self):
+        """2つのラベル表が食い違わないこと。
+
+        短縮ラベル側は誰も読んでいなかったので、mid が「中期」なのに
+        表示ラベルは「長期」という矛盾に長く気づけなかった。
+        """
+        from src.core.portfolio.projection import HORIZONS, HORIZON_LABELS
+
+        for key, (short_label, _) in HORIZONS.items():
+            assert HORIZON_LABELS[key].startswith(short_label), key
+
+    def test_uncertainty_widens_with_time(self):
+        """窓が長いほどレンジは広い。3ヶ月が1ヶ月より狭かったら式が壊れている。"""
+        r = project_portfolio(self._positions())
+        widths = [r[k]["high"] - r[k]["low"]
+                  for k in ("short", "quarter", "mid", "long")]
+        assert widths == sorted(widths)
+
     def test_current_total_includes_cash(self):
         result = project_portfolio(self._positions(), cash_value=500_000)
         assert result["current_total"] == 3_500_000

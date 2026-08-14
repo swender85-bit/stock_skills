@@ -1,0 +1,100 @@
+{
+  "pack_version": 2,
+  "mode": "portfolio",
+  "_fixture_note": "孤児ポジション6件（評価額の79.1%）。2026-08-02 の実状態を写したもの。thesis も政策も無い保有を孤児として名指ししなければ FAIL。",
+  "meta": {
+    "as_of": "2026-08-01",
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "holdings_source": "rakuten_csv",
+    "holdings_import": {"type": "assetbalance", "exported_at": "2026-07-30", "file": "assetbalance(all)_20260730.csv"},
+    "fx_rate": 161.4,
+    "warnings": []
+  },
+  "information": {
+    "verdict": "要対応週",
+    "quiet": false,
+    "actionable": [
+      {"priority": 3, "kind": "reconciliation", "title": "孤児ポジション 6件（評価額の 79.1%）", "detail": "なぜ持っているかが未記述です。損切りも利確も判断基準がありません。"}
+    ],
+    "actionable_count": 1,
+    "changed_count": 3,
+    "checked_count": 36,
+    "folded_count": 4,
+    "guidance": "孤児ポジションに thesis か政策を入れてください。"
+  },
+  "reconciliation": {
+    "as_of": "2026-08-01",
+    "status": "ok",
+    "blocking": false,
+    "reconcilable": true,
+    "independently_verified": true,
+    "model_source": "rakuten_csv(2026-07-30) / 取り込み前に reconcile 済み",
+    "counts": {"model": 9, "broker": 9, "matched": 9, "diffs": 0, "ghosts": 0, "unrecorded": 0, "unverified": 0, "orphans": 6},
+    "diffs": [],
+    "unknown_diffs": [],
+    "ghosts": [],
+    "unrecorded": [],
+    "unverified": [],
+    "corporate_actions": [],
+    "orphans": [
+      {"key": "sym:SOXL", "symbol": "SOXL", "name": "Direxion デイリー 半導体株 ブル 3倍 ETF", "market": "US", "shares": 275.0, "value_jpy": 4965655.06, "weight_pct": 24.88, "has_thesis": false, "has_policy": false, "message": "なぜ持っているかが記述されていません（thesis・政策の双方なし）"},
+      {"key": "sym:TECL", "symbol": "TECL", "name": "Direxion デイリー テクノロジー株 ブル 3倍 ETF", "market": "US", "shares": 154.0, "value_jpy": 4206782.49, "weight_pct": 21.08, "has_thesis": false, "has_policy": false, "message": "なぜ持っているかが記述されていません（thesis・政策の双方なし）"},
+      {"key": "sym:TQQQ", "symbol": "TQQQ", "name": "ProShares UltraPro QQQ", "market": "US", "shares": 214.0, "value_jpy": 2461583.0, "weight_pct": 12.33, "has_thesis": false, "has_policy": false, "message": "なぜ持っているかが記述されていません（thesis・政策の双方なし）"},
+      {"key": "name:iFreeNEXT FANG+インデックス", "symbol": null, "name": "iFreeNEXT FANG+インデックス", "market": "JP", "shares": 149927.0, "value_jpy": 1422267.0, "weight_pct": 7.13, "has_thesis": false, "has_policy": false, "message": "なぜ持っているかが記述されていません（thesis・政策の双方なし）"},
+      {"key": "sym:9843.T", "symbol": "9843.T", "name": "ニトリホールディングス", "market": "JP", "shares": 345.0, "value_jpy": 824550.0, "weight_pct": 4.13, "has_thesis": false, "has_policy": false, "message": "なぜ持っているかが記述されていません（thesis・政策の双方なし）"},
+      {"key": "sym:MDT", "symbol": "MDT", "name": "メドトロニック", "market": "US", "shares": 100.0, "value_jpy": 1340293.0, "weight_pct": 6.72, "has_thesis": true, "has_policy": false, "message": "政策が定義されていません（撤退・利確の判断基準なし）"}
+    ],
+    "orphan_burden_pct": 79.1,
+    "messages": ["孤児ポジション 6件（評価額の 79.1%）。損切りも利確も判断基準がありません。"]
+  },
+  "falsification": {"falsified": [], "near": [], "unchecked": [], "missing": [{"symbol": "SOXL", "name": "SOXL", "reason": "反証条件が未定義です。"}], "intact": 2, "checked": 2, "total": 3, "note": "反証条件が未定義の thesis が1件あります。"},
+  "forward": {
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "errors": [],
+    "calendar": {"range": "2026-08-03/2026-08-09", "as_of": "2026-08-01", "events": [], "folded": [], "unavailable_symbols": [], "note": "翌週に確定イベントはありません。"},
+    "concentration": {"available": true, "pct": 0.0, "level": "ok"},
+    "policy_gaps": {"gaps": [], "covered": [], "message": "翌週決算を迎える銘柄はありません。"},
+    "dividend_drops": [],
+    "monday_outlook": {"available": true, "note": "先物は小動き。"},
+    "schedule_changes": [],
+    "triggers": {"available": true, "approaching": [], "met": [], "checked": 2, "message": "トリガー接近・成立はありません。"},
+    "actionable": []
+  },
+  "constraints": {
+    "tax_state": {"realized_pl_jpy": 0, "recorded": true, "nisa_used_estimate": {"value": 600000, "reliable": true}, "warnings": []},
+    "runway_bundle": {"cash_jpy": 10100, "weekly_investable_jpy": 12500, "purpose_assigned": false},
+    "attention": {"holdings": 9, "orphans": 6, "minutes_per_holding": 15, "effective_watch": 3},
+    "loss_harvest": {"available": true, "candidates": []},
+    "liquidity": {"errors": [], "liquidity": {"profiles": [], "trapped": []}},
+    "errors": []
+  },
+  "execution_audit": {"window_days": 90, "executions_available": true, "survival": {"available": true, "total": 14, "executed": 10, "unexecuted": 4, "rate": 0.71}, "shortfall": {"available": true, "bps": -20.0}, "performance": {"available": true}, "reasons": [], "errors": []},
+  "model_audit": {"errors": [], "score": {"available": true, "weeks": 26, "min_weeks": 26, "bias": null}, "missing_factor": []},
+  "week_diff": {"changed": ["SOXL", "TECL"], "folded": ["2802.T", "MDT"]},
+  "cumulative_diff": {"available": true, "weeks_4": {"value_change_pct": -2.4}, "weeks_13": {"value_change_pct": 6.1}},
+  "narrative": {"crowding": {}},
+  "portfolio": {"total_jpy": 19960000, "cash_jpy": 10100, "total_pl_jpy": 8300000, "pl_pct": 71.2},
+  "holdings": [
+    {"name": "Direxion デイリー 半導体株 ブル 3倍 ETF", "symbol": "SOXL", "account": "特定", "shares": 275, "cost_price": 29.7495, "price": 160.99, "price_source": "yfinance", "currency": "USD", "value_jpy": 4965655, "pl_jpy": 3780000, "pl_pct": 441.2, "weight_pct": 24.88, "week_change_pct": -1.1, "leverage": 3,
+     "fundamentals": {"is_etf": true, "expense_ratio": 0.0075},
+     "technicals": {"last": 160.99, "rsi14": 47.0, "percent_b": 0.38, "range_52w_position": 0.4, "sma200_deviation_pct": -4.1, "heat_state": "neutral"}},
+    {"name": "メドトロニック", "symbol": "MDT", "account": "特定", "shares": 100, "cost_price": 79.32, "price": 81.89, "price_source": "yfinance", "currency": "USD", "value_jpy": 1340293, "pl_jpy": 48806, "pl_pct": 3.2, "weight_pct": 6.72, "week_change_pct": 0.8, "leverage": 1,
+     "fundamentals": {"per": 25.1, "pbr": 2.3, "roe": 0.11, "revenue_growth": 0.04, "earnings_growth": 0.06, "sector": "Healthcare", "is_etf": false},
+     "technicals": {"last": 81.89, "rsi14": 56.0, "percent_b": 0.6, "range_52w_position": 0.62, "sma200_deviation_pct": 3.0, "heat_state": "neutral"}}
+  ],
+  "indices": {},
+  "holding_news": {},
+  "market_news": [],
+  "moomoo": {},
+  "forward_schedule": [],
+  "schedule_status": {
+    "SOXL": {"symbol": "SOXL", "name": "SOXL", "fetched": true, "source": "yfinance", "status": "no_earnings", "label": "ETF なので決算はありません。"},
+    "MDT": {"symbol": "MDT", "name": "メドトロニック", "fetched": true, "source": "yfinance", "status": "none_upcoming", "next_earnings": "2026-08-18", "label": "取得済み。翌週に予定はありません。"}
+  },
+  "projection": {},
+  "scenarios": [],
+  "positions_assumptions": {},
+  "vol_calibration": {"available": true, "entries": []},
+  "monthly_contribution": 50000,
+  "prior_context": {"theses": [{"symbol": "MDT", "content": "医療機器のディフェンシブ枠。"}], "concerns": [], "lessons": []}
+}

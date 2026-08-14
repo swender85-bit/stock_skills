@@ -9,6 +9,7 @@
 Centralised threshold loader (KIK-446).
 
 - `get_thresholds() -> dict` — Return the full thresholds dict, loading from disk on first call.
+- `load_status() -> dict` — 髢ｾ蛟､繝輔ぃ繧､繝ｫ繧定ｪｭ繧√◆縺九ょ他縺ｳ蜃ｺ縺怜�ｴ縺後取里螳壼､縺ｧ蜍輔＞縺ｦ縺�繧九上→豌励▼縺代ｋ繧医≧縺ｫ縲�
 - `th(section: str, key: str, default)` — Look up *section.key* in thresholds, returning *default* on miss.
 
 ### src.core.action_item_bridge
@@ -56,6 +57,13 @@ Decision package: 蛻､譁ｭ繝代ャ繧ｱ繝ｼ繧ｸ縺ｮ讒狗ｯ峨��
 - `to_dict() -> dict`
 - `from_dict(data: Optional[dict]) -> 'InformationBoundary'`
 - `overlaps() -> list[str]` — 蜷御ｸ繝ｩ繝吶Ν縺瑚､�謨ｰ蛹ｺ蛻�縺ｫ迴ｾ繧後※縺�縺ｪ縺�縺区､懈渊縺吶ｋ(謗剃ｻ匁ｧ縺ｮ讀懆ｨｼ)縲�
+
+### src.core.env
+
+`.env` 縺ｮ隱ｭ縺ｿ霎ｼ縺ｿ繧剃ｸ邂�謇縺ｫ髮�邏�縺吶ｋ縲�
+
+- `load_env(force: bool=False) -> bool` — 繝励Ο繧ｸ繧ｧ繧ｯ繝育峩荳九�ｮ `.env` 繧堤腸蠅�螟画焚縺ｸ隱ｭ縺ｿ霎ｼ繧縲�
+- `status() -> dict` — `.env` 繧定ｪｭ繧√◆縺九ょ他縺ｳ蜃ｺ縺怜�ｴ縺後手ｨｭ螳壹＠縺溘�ｮ縺ｫ蜉ｹ縺九↑縺�縲上↓豌励▼縺代ｋ繧医≧縺ｫ縲�
 
 ### src.core.health.community
 
@@ -246,6 +254,33 @@ A single rebalancing action proposal.
 - `to_dict() -> dict`
 - `empty() -> 'SimulationResult'` — 繧ｷ繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ荳榊庄譎ゅ�ｮ遨ｺ邨先棡縲�
 
+### src.core.observation
+
+隕ｳ貂ｬ縺ｮ隧ｦ陦後ｒ隨ｬ荳邏壹�ｮ繝�繝ｼ繧ｿ縺ｨ縺励※謇ｱ縺�縲�
+
+- `classify(value: Any, *, attempted: bool=True, error: Optional[str]=None, expected: bool=True) -> str` — 1縺､縺ｮ隕ｳ貂ｬ邨先棡繧�4迥ｶ諷九↓蛻�鬘槭☆繧九�
+- `coverage_of(rows: Sequence[dict], predicate: Callable[[dict], bool], id_key: str='symbol', label: str='') -> Coverage` — 陦後�ｮ髮�蜷医↓縺､縺�縺ｦ縲∬ｦｳ貂ｬ縺ｧ縺阪◆莉ｶ謨ｰ縺ｨ谺縺代◆隴伜挨蟄舌ｒ謨ｰ縺医ｋ縲�
+- `partial_total(rows: Sequence[dict], key: str, id_key: str='symbol', label: str='') -> tuple[float, Coverage]` — 蜷郁ｨ医→縲√◎縺ｮ蜷郁ｨ医′菴穂ｻｶ縺九ｉ蜃ｺ縺溘°繧�**蠢�縺壻ｸ邱偵↓**霑斐☆縲�
+- `safe_ratio(rows: Sequence[dict], numerator_key: str, denominator_key: str, id_key: str='symbol') -> dict` — 豈皮紫繧偵�**蛻�蟄舌→蛻�豈阪′蜷後§髮�蜷医°繧画擂縺ｦ縺�繧九→縺阪□縺�**霑斐☆縲�
+- `annotate(value: Any, coverage: Coverage, unit: str='莉ｶ') -> str` — 陦ｨ遉ｺ逕ｨ縲よｯ肴焚縺梧ｬ縺代※縺�繧後�ｰ蠢�縺壻ｽｵ險倥＆繧後ｋ譁�蟄怜�励ｒ菴懊ｋ縲�
+- `core_failures(rows: Sequence[dict], status_key: str='price_status', id_key: str='symbol') -> list` — 荳ｭ譬ｸ繝�繝ｼ繧ｿ縺ｮ蜿門ｾ励↓螟ｱ謨励＠縺溯｡後ｒ縲∫炊逕ｱ縺､縺阪〒蛻玲嫌縺吶ｋ縲�
+
+#### class Coverage
+縺ゅｋ髮�蜷医ｒ菴穂ｻｶ隕ｳ貂ｬ縺ｧ縺阪◆縺九�**髮�險亥､縺ｫ縺ｯ蠢�縺壹％繧後ｒ豺ｻ縺医ｋ縲�**
+
+| Field | Type |
+|:---|:---|
+| `total` | `int` |
+| `observed` | `int` |
+| `missing` | `list` |
+| `label` | `str` |
+
+- `complete() -> bool`
+- `ratio() -> float`
+- `fraction() -> str`
+- `note(unit: str='莉ｶ') -> str` — 豈肴焚縺ｮ菴ｵ險俶枚縲ょｮ悟�ｨ縺ｪ繧臥ｩｺ譁�蟄励ｒ霑斐☆�ｼ育┌螳ｳ縺ｪ霑ｽ險倥↓縺励↑縺��ｼ峨�
+- `to_dict() -> dict`
+
 ### src.core.portfolio.backtest
 
 Backtest engine -- verify returns of previously screened stocks.
@@ -364,6 +399,7 @@ What-If portfolio simulation (KIK-376, KIK-451).
 - `aggregate(positions: list[dict]) -> dict[str, dict]` — 蜷御ｸ驫俶氛�ｼ郁､�謨ｰ蜿｣蠎ｧ�ｼ峨ｒ1縺､縺ｫ譚溘�ｭ繧九�
 - `classify_quantity_diff(model_shares: Optional[float], broker_shares: Optional[float], value_per_share_jpy: Optional[float]=None, share_tolerance: float=..., value_tolerance_jpy: float=...) -> dict` — 謨ｰ驥丞ｷｮ蛻�繧貞��鬘槭☆繧九�
 - `reconcile(model_positions: list[dict], broker_snapshots: list[dict], *, values_jpy: Optional[dict[str, float]]=None, total_jpy: Optional[float]=None, share_tolerance: float=..., value_tolerance_jpy: float=..., check_intent: bool=True) -> dict` — 荳臥せ辣ｧ蜷医ｒ螳溯｡後☆繧九�
+- `describe_positions(model: dict, values: dict, total_jpy: Optional[float]) -> dict` — 菫晄怏縺ｮ險倩ｿｰ迥ｶ諷九ｒ4蛻�鬘槭☆繧具ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 縺ｮ V0�ｼ峨�
 - `orphan_burden(orphans: list[dict]) -> Optional[float]` — 蟄､蜈舌�昴ず繧ｷ繝ｧ繝ｳ縺瑚ｩ穂ｾ｡鬘阪↓蜊繧√ｋ豈皮紫�ｼ�%�ｼ峨�
 - `apply_corporate_actions(config: dict, result: dict) -> tuple[dict, list[str]]` — 蛻�蜑ｲ/菴ｵ蜷医→蛻､螳壹＆繧後◆蟾ｮ蛻�縺縺第ｨ｡蝙九�ｮ譬ｪ謨ｰ繧定｣懈ｭ｣縺吶ｋ縲�
 - `run_reconciliation(holdings_config: Optional[dict]=None, *, report_data: Optional[dict]=None, sources: Optional[list[str]]=None, csv_path: Optional[str]=None, autostart_opend: bool=True, check_intent: bool=True) -> dict` — 險ｭ螳壹�ｮ隱ｭ縺ｿ霎ｼ縺ｿ縺九ｉ繝悶Ο繝ｼ繧ｫ繝ｼ蜿門ｾ励�ｻ辣ｧ蜷医∪縺ｧ繧�1譛ｬ縺ｧ陦後≧縲�
@@ -539,6 +575,128 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `save_note(symbol: str, note_type: str, content: str, *, category: str='stock', base_dir: str='data/notes') -> str` — Save an investment note. Returns absolute path of saved file.
 - `list_notes(symbol: str | None=None, note_type: str | None=None, category: str | None=None, base_dir: str='data/notes') -> list[dict]` — Return notes matching the given filters.
 
+### src.core.power
+
+螳溯｡御ｸｭ縺ｫ繧ｹ繝ｪ繝ｼ繝励∈謌ｻ繧峨○縺ｪ縺� -- 闢九ｒ髢峨§縺溘せ繧ｿ繝ｳ繝舌う驕狗畑縺ｮ蜑肴署譚｡莉ｶ.
+
+- `is_windows() -> bool`
+- `prevent_sleep(display: bool=False, away_mode: bool=False) -> dict` — 蜃ｦ逅�縺檎ｵゅｏ繧九∪縺ｧ繧ｷ繧ｹ繝�繝繧ｹ繝ｪ繝ｼ繝励ｒ謚第ｭ｢縺吶ｋ縲�
+- `allow_sleep() -> bool` — 謚第ｭ｢繧定ｧ｣髯､縺励�騾壼ｸｸ縺ｮ繧ｹ繝ｪ繝ｼ繝怜虚菴懊↓謌ｻ縺吶�
+- `keep_awake(label: str='', display: bool=False, quiet: bool=False)` — 蜃ｦ逅�荳ｭ繧ｹ繝ｪ繝ｼ繝励↓謌ｻ繧峨○縺ｪ縺�繧ｳ繝ｳ繝�繧ｭ繧ｹ繝医�
+- `power_status() -> dict` — 縺�縺ｾ繧ｹ繝ｪ繝ｼ繝玲椛豁｢縺悟柑縺上°繧定ｨｺ譁ｭ縺吶ｋ�ｼ育┌莠ｺ螳溯｡悟燕縺ｮ閾ｪ蟾ｱ轤ｹ讀懃畑�ｼ峨�
+
+### src.core.primary_source
+
+荳谺｡隕ｳ貂ｬ縺ｮ萓帷ｵｦ -- 邉ｻ隴應ｼ夊ｨ医�ｮ蠎輔ｒ菴懊ｋ (2026-08-06).
+
+- `fetch_filings(symbol: str, days: int=30, limit: int=8, today: Optional[date]=None) -> dict` — 縺昴�ｮ驫俶氛縺ｮ荳谺｡髢狗､ｺ繧貞叙繧九ょｸょｴ縺ｧ蜿門ｾ怜��繧呈険繧雁��縺代ｋ縲�
+- `claims_from_filings(filings_result: dict) -> list[dict]` — 髢狗､ｺ繧堤ｳｻ隴懊▽縺阪�ｮ荳ｻ蠑ｵ�ｼ�Claim�ｼ峨↓螟画鋤縺吶ｋ縲�
+- `build_primary_section(symbols: list[str], days: int=30, limit_per_symbol: int=5, today: Optional[date]=None, persist: bool=False) -> dict` — 菫晄怏驫俶氛縺ｮ荳谺｡髢狗､ｺ繧偵∪縺ｨ繧√ｋ�ｼ医ヶ繝ｪ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕ｨ�ｼ峨�
+- `source_status() -> dict` — 荳谺｡諠�蝣ｱ貅舌′菴ｿ縺医ｋ迥ｶ諷九°繧剃ｸ隕ｧ縺吶ｋ�ｼ郁ｨｺ譁ｭ逕ｨ�ｼ峨�
+
+### src.core.reading.concepts
+
+讎ょｿｵ螻､�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 隨ｬ3驛ｨ�ｼ俄� 驫俶氛縺ｮ豁ｻ繧定ｶ�縺医※谿九ｋ遏･隴倥�
+
+- `slug(name: str) -> str`
+- `build(*, name: str, category: str, body: str, counterexample: str, aliases: Optional[list]=None, applies_to: Optional[list]=None, sources: Optional[list]=None, related_concepts: Optional[list]=None, is_assumption: bool=False, open_questions: Optional[str]=None) -> dict` — 讎ょｿｵ繝壹�ｼ繧ｸ縺ｮ frontmatter + 譛ｬ譁�繧堤ｵ�縺ｿ遶九※繧九�
+- `save(concept: dict, config: Optional[dict]=None) -> str` — 讎ょｿｵ繝壹�ｼ繧ｸ繧� vault 縺ｸ譖ｸ縺上よ里蟄倥′縺ゅｌ縺ｰ蜀�螳ｹ繧貞ｷｮ縺玲崛縺医ｋ�ｼ域ｦょｿｵ縺ｯ邱ｨ髮�蜿ｯ�ｼ峨�
+- `load_all(config: Optional[dict]=None) -> list` — vault 荳翫�ｮ蜈ｨ讎ょｿｵ縲Ａ_archive/` 縺ｯ蜷ｫ繧√↑縺��ｼ亥ｻ�豁｢貂医∩縺ｯ讀懃ｴ｢蟇ｾ雎｡螟厄ｼ峨�
+- `find_similar(name: str, existing: Optional[list]=None, config: Optional[dict]=None) -> list` — 霑代＞讎ょｿｵ繧呈爾縺吶�**菴懈�仙燕縺ｫ蠢�縺壼他縺ｶ縲�**
+- `count_guidance(n: int) -> dict`
+- `success_rate(concept: dict) -> Optional[float]`
+- `next_confidence(concept: dict) -> dict` — 騾ｱ谺｡隧穂ｾ｡縺ｧ縺ｮ閾ｪ蜍暮�ｷ遘ｻ繧呈ｱｺ繧√ｋ縲�**蟒�豁｢縺ｯ霑斐＆縺ｪ縺�縲�**
+- `usable_as_constraint(concept: dict) -> dict` — plan-check 縺ｮ蛻ｶ邏�縺ｨ縺励※菴ｿ縺医ｋ縺九�
+- `audit(config: Optional[dict]=None) -> dict` — 讎ょｿｵ螻､縺ｮ蛛･蜈ｨ諤ｧ縲るｱ谺｡繝ｬ繝昴�ｼ繝育ｯ2縺ｧ菴ｿ縺�縲�
+
+#### class ConceptError
+讎ょｿｵ縺ｮ逋ｻ骭ｲ繝ｻ譖ｴ譁ｰ縺ｮ螟ｱ謨励�**謠｡繧頑ｽｰ縺輔↑縺�縲�**
+
+
+### src.core.reading.diet_audit
+
+蛛城｣溽屮譟ｻ�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 隨ｬ4驛ｨ�ｼ俄� 5謖�讓吶�
+
+- `load_sources(config: Optional[dict]=None, days: Optional[int]=None) -> dict` — 邏｢蠑輔°繧� raw 縺ｮ frontmatter 繧定ｪｭ繧縲�
+- `holding_bias(rows: list, held: Optional[list]=None) -> dict` — 菫晄怏驫俶氛縺ｫ險蜿翫☆繧� raw 縺ｮ豈皮紫縲�
+- `stance_asymmetry(rows: list, held: Optional[list]=None) -> dict` — 菫晄怏驫俶氛縺斐→縺ｮ謾ｯ謖�/謇ｹ蛻､縲�
+- `source_hhi(rows: list) -> dict` — 逋ｺ菫｡貅舌�ｮ髮�荳ｭ蠎ｦ縲�**繝昴�ｼ繝医ヵ繧ｩ繝ｪ繧ｪHHI縺ｨ蜷御ｸ繝｢繧ｸ繝･繝ｼ繝ｫ繧剃ｽｿ縺�縲�**
+- `dormant_ideas(rows: list, held: Optional[list]=None, traded_symbols: Optional[list]=None) -> dict` — 隱ｭ繧薙□縺梧焔繧貞�ｺ縺輔↑縺九▲縺滄釜譟�縺ｮ荳隕ｧ縲�
+- `idea_to_execution(rows: list, trades: Optional[list]=None) -> dict` — 蛻昴ａ縺ｦ隱ｭ繧薙〒縺九ｉ雋ｷ縺�縺ｾ縺ｧ縺ｮ譌･謨ｰ縲�
+- `information_delay(rows: list) -> dict` — `ingested_at - published_at` 縺ｮ荳ｭ螟ｮ蛟､縲�
+- `audit(config: Optional[dict]=None, days: int=DEFAULT_WINDOW_DAYS, trades: Optional[list]=None) -> dict` — 5謖�讓吶ｒ縺ｾ縺ｨ繧√※霑斐☆縲ゆｾ｡譬ｼ縺ｫ萓晏ｭ倥＠縺ｪ縺�縺ｮ縺ｧ縲∵遠縺｡蛻�繧企ｱ縺ｧ繧ょ虚縺上�
+
+### src.core.reading.entities
+
+繧ｨ繝ｳ繝�繧｣繝�繧｣隗｣豎ｺ�ｼ亥錐蟇�縺幢ｼ俄� `config/entity_aliases.yaml` 繧貞ｼ輔￥縲�
+
+- `canonical(name: str) -> Optional[str]` — 1縺､縺ｮ陦ｨ險倥ｒ豁｣隕上す繝ｳ繝懊Ν縺ｸ縲りｧ｣豎ｺ縺ｧ縺阪↑縺代ｌ縺ｰ None縲�
+- `underlying(symbol: str) -> Optional[str]` — 繝ｬ繝舌Ξ繝�繧ｸETF繝ｻ謚穂ｿ｡縺ｮ蜴溯ｳ�逕｣縲�
+- `watch_only() -> list`
+- `extract(text: str, max_entities: int=12) -> dict` — 譛ｬ譁�縺九ｉ驫俶氛繧呈歓蜃ｺ縺吶ｋ縲�
+- `held_symbols(config: Optional[dict]=None) -> list` — 迴ｾ蝨ｨ縺ｮ菫晄怏驫俶氛�ｼ域ｭ｣隕上す繝ｳ繝懊Ν�ｼ峨ょ￥鬟溽屮譟ｻ縺ｮ蛻�蟄舌↓菴ｿ縺�縲�
+
+### src.core.reading.genealogy
+
+邉ｻ隴懊�ｮ譬ｹ�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 V5�ｼ俄� thesis 繧貞慍髱｢縺ｫ謗･邯壹☆繧九�
+
+- `classify_thesis(thesis: dict, sources_by_id: dict) -> dict` — 1縺､縺ｮ thesis 縺ｮ邉ｻ隴懃憾諷九�
+- `audit_theses(theses: Optional[list]=None, config: Optional[dict]=None) -> dict` — 蜈ｨ thesis 縺ｮ邉ｻ隴懃憾諷九�
+- `assumption_concentration(theses: Optional[list]=None, config: Optional[dict]=None) -> dict` — thesis 縺御ｾ晄侠縺吶ｋ讎ょｿｵ縺ｮ髮�荳ｭ蠎ｦ�ｼ亥燕謠千ｩｺ髢滴HI�ｼ峨�
+- `report(config: Optional[dict]=None) -> dict` — 遽2縺ｫ霈峨○繧狗ｳｻ隴懊し繝槭Μ縲�
+
+### src.core.reading.ingest
+
+蜿悶ｊ霎ｼ縺ｿ繝代う繝励Λ繧､繝ｳ�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 隨ｬ2驛ｨ 2-6�ｼ俄� 10繧ｹ繝�繝ｼ繧ｸ縲�
+
+- `find_duplicate(root: Path, hash_value: str) -> Optional[dict]` — 蜷御ｸ蜀�螳ｹ縺梧里縺ｫ蜿悶ｊ霎ｼ縺ｾ繧後※縺�繧九°縲�**id 縺ｧ縺ｯ縺ｪ縺� content_hash 縺ｧ隕九ｋ縲�**
+- `detect_stance(body: str, entities: list, provenance: str) -> dict` — 隲冶ｪｿ繧�4蛟､縺ｧ縲�**荳谺｡雉�譁吶�ｯ譌｢螳壹〒荳ｭ遶�**�ｼ亥次譛ｬ縺ｯ隲悶§縺ｪ縺��ｼ峨�
+- `ingest(*, body: str, title: str, source_url: Optional[str]=None, source_type: str='text', attachment: Optional[str]=None, note: Optional[str]=None, precision: str=schema.EXACT, provenance_override: Optional[str]=None, config: Optional[dict]=None, ingested_at: Optional[datetime]=None, dry_run: bool=False) -> dict` — 1莉ｶ繧貞叙繧願ｾｼ繧縲�
+- `thesis_prompt(entities: list) -> Optional[str]` — thesis 縺ｮ辟｡縺�菫晄怏驫俶氛縺ｫ隗ｦ繧後◆繧峨∬拷遞ｿ菴懈�舌ｒ菫�縺呻ｼ井ｻ墓ｧ� 2-8�ｼ峨�
+
+#### class IngestError
+蜿悶ｊ霎ｼ縺ｿ縺ｮ螟ｱ謨励�**辟｡髻ｳ縺ｧ謠｡繧頑ｽｰ縺輔↑縺�縲�**
+
+
+### src.core.reading.safety
+
+蜿悶ｊ霎ｼ縺ｿ譎ゅ�ｮ螳牙�ｨ襍ｰ譟ｻ�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 隨ｬ6驛ｨ�ｼ峨�
+
+- `scan(text: str, *, source_url: Optional[str]=None) -> list` — 逕溘ユ繧ｭ繧ｹ繝医ｒ襍ｰ譟ｻ縺励∵､懷�ｺ縺励◆譌励ｒ霑斐☆縲�**蜿悶ｊ霎ｼ縺ｿ縺ｯ豁｢繧√↑縺�縲�**
+- `severity_of(flags: list) -> Optional[str]`
+- `summarize(flags: list) -> str` — 莠ｺ髢薙↓謠千､ｺ縺吶ｋ1陦後�**縲悟ｮ牙�ｨ縺ｧ縺励◆縲阪→縺ｯ譖ｸ縺九↑縺�縲�**
+
+### src.core.reading.schema
+
+raw 縺ｮ frontmatter 繧ｹ繧ｭ繝ｼ繝槭→讀懆ｨｼ�ｼ郁ｪｭ譖ｸ蜿ｰ蟶ｳ莉墓ｧ� v2 隨ｬ2驛ｨ 2-2�ｼ峨�
+
+- `content_hash(text: str) -> str` — 譛ｬ譁�縺ｮ繝上ャ繧ｷ繝･縲�**繝ｦ繝ｼ繧ｶ繝ｼ蜈･蜉帙ｒ蜿励￠莉倥￠縺ｪ縺�縲�**
+- `make_id(ingested_at: datetime, hash_value: str) -> str` — `src_<YYYYMMDD>_<HHMM>_<hash4>`
+- `now() -> datetime` — 繧ｷ繧ｹ繝�繝譎ょ綾�ｼ医Ο繝ｼ繧ｫ繝ｫ繧ｿ繧､繝繧ｾ繝ｼ繝ｳ莉倥″�ｼ峨�
+- `parse_published(text: Optional[str]) -> Optional[str]` — 譛ｬ譁�縺九ｉ蜈ｬ髢区律繧呈鏡縺�縲�**隕九▽縺九ｉ縺ｪ縺代ｌ縺ｰ謗ｨ貂ｬ縺励↑縺��ｼ�None�ｼ峨�**
+- `build_frontmatter(*, title: str, body: str, provenance: str, source_type: str, ingested_at: Optional[datetime]=None, source_url: Optional[str]=None, attachment: Optional[str]=None, published_at: Optional[str]=None, entities: Optional[list]=None, entity_names_raw: Optional[list]=None, entities_unresolved: Optional[list]=None, stance: str=NEUTRAL, language: str='ja', author: Optional[str]=None, tags: Optional[list]=None, note: Optional[str]=None, related_thesis: Optional[list]=None, security_flags: Optional[list]=None, precision: str=EXACT, ingest_version: str='1.0') -> dict` — 讀懆ｨｼ貂医∩縺ｮ frontmatter 繧堤ｵ�縺ｿ遶九※繧九�
+- `validate(fm: dict, body: str) -> list` — 讀懆ｨｼ驕募渚繧貞�玲嫌縺吶ｋ縲�**遨ｺ繝ｪ繧ｹ繝医↑繧牙粋譬ｼ縲�**
+- `to_markdown(fm: dict, body: str) -> str` — frontmatter + 譛ｬ譁�縺ｮ Markdown縲よ隼陦後�ｯ LF 縺ｫ邨ｱ荳縺吶ｋ縲�
+- `parse_markdown(text: str) -> tuple` — `(frontmatter, body)` 縺ｫ蛻�隗｣縺吶ｋ縲Ｇrontmatter 縺檎┌縺代ｌ縺ｰ `({}, text)`縲�
+
+### src.core.reading.vault
+
+隱ｭ譖ｸ蜿ｰ蟶ｳ縺ｮ vault 螻､ 窶� 繝代せ隗｣豎ｺ縺ｨ讒矩縺ｮ蠅苓ｨｭ縲�
+
+- `vault_root(config: Optional[dict]=None) -> Optional[Path]` — `config/output.yaml` 縺ｮ `obsidian_vault_path` 繧定ｿ斐☆縲�
+- `require_vault(config: Optional[dict]=None) -> Path` — vault 繧定ｿ斐☆縲ら┌縺代ｌ縺ｰ萓句､悶�**None 繧定ｿ斐＠縺ｦ鮟吶ｉ縺帙↑縺�縲�**
+- `ensure_structure(config: Optional[dict]=None) -> dict` — raw / concepts / .index 繧貞｢苓ｨｭ縺吶ｋ縲よ里蟄倥↓縺ｯ隗ｦ繧後↑縺�縲�
+- `safe_stem(text: str, max_len: int=MAX_STEM) -> str` — 繝輔ぃ繧､繝ｫ蜷阪↓菴ｿ縺医ｋ蠖｢縺ｸ縲よ律譛ｬ隱槭�ｯ谿九☆�ｼ�Windows 縺ｧ螳牙�ｨ�ｼ峨�
+- `raw_path(root: Path, ingested_at: datetime, provenance: str, title: str) -> Path` — `raw/YYYY/MM/YYYYMMDD_HHMM_<provenance>_<title>.md`
+- `concept_path(root: Path, name: str) -> Path`
+- `index_path(root: Path, name: str) -> Path`
+- `check_readable(path: Path) -> dict` — iCloud 縺ｮ縲後け繝ｩ繧ｦ繝峨�ｮ縺ｿ縲咲憾諷九ｒ讀懷�ｺ縺吶ｋ縲�
+- `health(config: Optional[dict]=None) -> dict` — vault 閾ｪ菴薙�ｮ蛛･蜈ｨ諤ｧ�ｼ井ｻ墓ｧ� 10-3�ｼ峨�
+
+#### class VaultUnavailable
+vault 縺瑚ｨｭ螳壹＆繧後※縺�縺ｪ縺�縲√∪縺溘�ｯ螳溷惠縺励↑縺�縲�
+
+
 ### src.core.research.briefing_pack
 
 繝悶Μ繝ｼ繝輔ぅ繝ｳ繧ｰ繝代ャ繧ｯ逕滓�� 窶� Claude 縺ｮ豺ｱ謗倥ｊ synthesis 縺ｫ貂｡縺吶悟�ｨ譚先侭縲阪ｒ1縺､縺ｫ譚溘�ｭ繧句ｱ､縲�
@@ -555,6 +713,14 @@ Storage for investment notes (thesis, concern, lesson, etc.).
 - `peer_note(symbol: str) -> Optional[str]`
 - `fetch_peer_snapshot(symbol: str, client: Any=None) -> Optional[dict]` — 1縺､縺ｮ peer 縺ｮ逶ｴ霑代せ繝翫ャ繝励す繝ｧ繝�繝茨ｼ井ｾ｡譬ｼ繝ｻ騾ｱ髢馴ｨｰ關ｽ繝ｻ繝舌Μ繝･繧ｨ繝ｼ繧ｷ繝ｧ繝ｳ繝ｻ謌宣聞�ｼ峨�
 - `build_peer_context(symbols: list[str], client: Any=None, max_peers: int=5) -> dict[str, dict]` — 菫晄怏蜷�驫俶氛縺ｫ縺､縺�縺ｦ縲∫ｫｶ蜷医せ繝翫ャ繝励す繝ｧ繝�繝医�ｮ繝ｪ繧ｹ繝医ｒ邨�縺ｿ遶九※繧九�
+
+### src.core.research.constituent_intel
+
+讒区�宣釜譟�繧､繝ｳ繝�繝ｪ繧ｸ繧ｧ繝ｳ繧ｹ -- ETF縺ｮ荳ｭ霄ｫ繧偵悟錐蜑阪�ｮ荳隕ｧ縲阪〒邨ゅｏ繧峨○縺ｪ縺�.
+
+- `build_dossier(symbol: str, effective_pct: float=0.0, via: Optional[list[str]]=None, held_directly: bool=False, news_days: int=7, news_limit: int=3) -> dict` — 讒区�宣釜譟�1縺､蛻�縺ｮ蛻､譁ｭ譚先侭繧偵∪縺ｨ繧√ｋ縲�
+- `build_constituent_intel(lookthrough: Optional[dict], holdings: Optional[list[dict]]=None, top_n: int=DEFAULT_TOP_N, min_effective_pct: float=1.0) -> dict` — 螳溷柑繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ荳贋ｽ阪�ｮ讒区�宣釜譟�縺ｫ縺､縺�縺ｦ dossier 繧剃ｽ懊ｋ縲�
+- `format_constituent_intel(intel: Optional[dict], limit: int=12) -> str` — 繝ｬ繝昴�ｼ繝育畑縲�**豈皮紫縺ｮ荳隕ｧ縺ｧ邨ゅｏ繧峨○縺壹∝ｽ｢縺ｨ隕九←縺薙ｍ縺ｾ縺ｧ譖ｸ縺上�**
 
 ### src.core.research.narrative
 
@@ -605,6 +771,16 @@ Deep research orchestration for stocks, industries, and markets (KIK-367).
 - `research_market(market: str, yahoo_client_module=None, *, research_client: ResearchClient | None=None) -> dict` — Run market overview research via yfinance + Grok.
 - `research_business(symbol: str, yahoo_client_module: StockInfoProvider, *, research_client: ResearchClient | None=None) -> dict` — Run business model research combining yfinance and Grok.
 
+### src.core.research.watch_plan
+
+逶｣隕冶ｨ育判縺ｮ閾ｪ蜍募ｰ主�ｺ -- 縲御ｻ翫�ｮ菫晄怏縲阪°繧峨∬ｦ九ｋ縺ｹ縺阪ｂ縺ｮ繧呈ｯ主屓豎ｺ繧√ｋ.
+
+- `classify_holdings(holdings: list[dict], lookthrough: Optional[dict]=None) -> dict` — 菫晄怏繝ｻETF邨檎罰繝ｻ髱樔ｿ晄怏繧呈�守､ｺ逧�縺ｫ蛻�縺代ｋ縲�
+- `derive_indices(holdings: list[dict], lookthrough: Optional[dict]=None) -> list[dict]` — 菫晄怏縺九ｉ隕九ｋ縺ｹ縺肴欠謨ｰ繧呈ｱｺ繧√ｋ縲�**險ｭ螳壹↓譖ｸ縺九↑縺�縲�**
+- `derive_peers(holdings: list[dict], cfg: Optional[dict]=None) -> dict` — 遶ｶ蜷医ｒ豎ｺ繧√ｋ縲�**菫晄怏縺励※縺�縺ｪ縺�驫俶氛縺ｮ遶ｶ蜷医�ｯ霑ｽ繧上↑縺�縲�**
+- `build_watch_plan(holdings: list[dict], lookthrough: Optional[dict]=None) -> dict` — 莉翫�ｮ菫晄怏縺九ｉ縲∽ｻ企ｱ隕九ｋ縺ｹ縺阪ｂ縺ｮ繧貞�ｨ驛ｨ蟆主�ｺ縺吶ｋ縲�
+- `format_watch_plan(plan: Optional[dict]) -> str`
+
 ### src.core.return_estimate
 
 Portfolio return estimation with 3 scenarios (KIK-359).
@@ -621,17 +797,20 @@ Correlation analysis and VaR computation for portfolio stress testing (KIK-352).
 - `decompose_factors(portfolio_data: list[dict], factor_histories: dict[str, list[float]]) -> list[dict]` — Run factor regression for each portfolio stock.
 - `compute_var(portfolio_data: list[dict], weights: list[float], confidence_levels: tuple[float, ...]=(0.95, 0.99), total_value: Optional[float]=None) -> dict` — Compute historical Value-at-Risk for a portfolio.
 
-### src.core.risk.etf_lookthrough
+### src.core.risk.forward_horizon
 
-ETF 繝ｫ繝�繧ｯ繧ｹ繝ｫ繝ｼ 窶� 荳ｭ霄ｫ縺ｮ莨∵･ｭ縺ｮ繧､繝吶Φ繝医↓縲∬�ｪ蛻�縺御ｽ�%譖昴＆繧後※縺�繧九°縲�
+蜑肴婿繧ｫ繝ｬ繝ｳ繝繝ｼ�ｼ域焚繝ｶ譛亥�茨ｼ� -- 縲檎ｿ碁ｱ縲阪□縺代ｒ隕九ｋ讒矩繧偵ｄ繧√ｋ.
 
-- `load_config(path: str=DEFAULT_CONFIG) -> dict`
-- `reset_config_cache() -> None`
-- `resolve_proxy(symbol: Optional[str], name: Optional[str]=None, cfg: Optional[dict]=None) -> dict` — 縺薙�ｮ菫晄怏縺ｮ荳ｭ霄ｫ繧定ｦ九ｋ縺溘ａ縺ｫ縲√←縺ｮ繝�繧｣繝�繧ｫ繝ｼ繧定ｪｿ縺ｹ繧後�ｰ繧医＞縺九�
-- `resolve_technical_proxy(symbol: Optional[str], name: Optional[str]=None, cfg: Optional[dict]=None) -> Optional[dict]` — 繝�繧ｯ繝九き繝ｫ繧定ｨ育ｮ励☆繧九◆繧√�ｮ莉｣逅�繝�繧｣繝�繧ｫ繝ｼ縲ら┌縺代ｌ縺ｰ None縲�
-- `fetch_holdings(ticker: str, *, cfg: Optional[dict]=None, cache_path: str=DEFAULT_CACHE, use_cache: bool=True) -> dict` — ETF 縺ｮ荳贋ｽ肴ｧ区�宣釜譟�縺ｨ蜀�驛ｨ繧ｦ繧ｧ繧､繝医ｒ霑斐☆縲�
-- `build_lookthrough(holdings: list[dict], *, cfg: Optional[dict]=None, use_cache: bool=True) -> dict` — 菫晄怏繧偵御ｸｭ霄ｫ縺ｮ莨∵･ｭ縲阪∪縺ｧ螻暮幕縺励∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ繧貞粋邂励☆繧九�
-- `lookthrough_events(lookthrough: dict, *, as_of=None, events_by_symbol: Optional[dict]=None, min_effective_pct: Optional[float]=None) -> dict` — 螻暮幕縺励◆讒区�宣釜譟�縺ｮ鄙碁ｱ繧､繝吶Φ繝医ｒ縲∝ｮ溯ｳｪ繧ｨ繧ｯ繧ｹ繝昴�ｼ繧ｸ繝｣繝ｼ莉倥″縺ｧ霑斐☆縲�
+- `build_forward_horizon(holdings: list[dict], lookthrough: Optional[dict]=None, *, as_of: Optional[date]=None, horizon_days: int=DEFAULT_HORIZON_DAYS, events_by_symbol: Optional[dict]=None, min_effective_pct: float=0.5) -> dict` — 菫晄怏�ｼ畿TF讒区�宣釜譟�縺ｮ豎ｺ邂励�ｻ驟榊ｽ薙ｒ縲∵焚繝ｶ譛亥�医∪縺ｧ荳ｦ縺ｹ繧九�
+- `format_horizon(horizon: Optional[dict], limit: int=25) -> str` — 繝ｬ繝昴�ｼ繝育畑縺ｮ陦ｨ縲�**螳溷柑%莉倥″**縺ｧ縲後＞縺､菴�%縺碁夐℃縺吶ｋ縺九阪ｒ隕九○繧九�
+
+### src.core.risk.leverage_sleeve
+
+3x繧ｹ繝ｪ繝ｼ繝悶�ｮ螳滉ｽ灘��譫� -- 3譛ｬ縺ｮETF繧偵�3縺､縺ｮ繝昴ず繧ｷ繝ｧ繝ｳ縲阪→謨ｰ縺医↑縺�.
+
+- `volatility_drag(leverage: float, sigma: float) -> float` — 繝懊Λ繝�繧｣繝ｪ繝�繧｣繝ｻ繝峨Λ繝�繧ｰ�ｼ亥ｹｴ邇�繝ｻ蟆乗焚�ｼ峨�
+- `analyze_sleeve(holdings: list[dict], lookthrough: Optional[dict]=None, total_jpy: Optional[float]=None) -> dict` — 繝ｬ繝舌Ξ繝�繧ｸ繝ｻ繧ｹ繝ｪ繝ｼ繝悶�ｮ螳滉ｽ薙ｒ蜃ｺ縺吶�
+- `format_sleeve(sleeve: Optional[dict]) -> str` — 繝ｬ繝昴�ｼ繝育畑縲�
 
 ### src.core.risk.scenario_analysis
 
@@ -989,6 +1168,27 @@ Graph-state analysis and skill recommendation (KIK-411/414).
 
 TEI vector search and result merging for hybrid context retrieval (KIK-420).
 
+
+### src.data.critic_feed
+
+X�ｼ�Twitter�ｼ峨°繧画音隧募ｮｶ縺ｮ逋ｺ險繧貞叙蠕励☆繧� -- 謾ｹ蝟�5 縺ｮ蜈･蜉帷ｵ瑚ｷｯ.
+
+- `load_critics_config(path: Optional[str]=None) -> dict` — `config/critics.yaml` 繧定ｪｭ繧縲ら┌縺代ｌ縺ｰ遨ｺ�ｼ茨ｼ晏叙蠕怜ｯｾ雎｡縺ｪ縺暦ｼ峨�
+- `enabled_critics(config: Optional[dict]=None) -> list[dict]`
+- `fetch_recent_posts(handle: str, days: int=7, limit: int=20, timeout: int=45, caller: Any=None) -> dict` — 1繧｢繧ｫ繧ｦ繝ｳ繝医�ｮ逶ｴ霑醍匱險繧貞叙繧九�
+- `fetch_all(days: Optional[int]=None, config: Optional[dict]=None, caller: Any=None) -> dict` — 逋ｻ骭ｲ貂医∩繧｢繧ｫ繧ｦ繝ｳ繝医ｒ蜈ｨ驛ｨ蜿悶ｋ縲�
+- `trust_map(config: Optional[dict]=None) -> dict[str, str]` — source_id 竊� trust 繝�繧｣繧｢縲よ悴謖�螳壹�ｯ `standard`縲�
+
+### src.data.edgar_client
+
+SEC EDGAR -- **荳谺｡隕ｳ貂ｬ�ｼ�primary_observation�ｼ峨�ｮ萓帷ｵｦ貅�**�ｼ育ｱｳ蝗ｽ譬ｪ�ｼ�.
+
+- `user_agent() -> str`
+- `is_available() -> bool` — SEC 繧貞娼縺代ｋ迥ｶ諷九°縲�
+- `unavailable(reason: str='') -> dict`
+- `resolve_cik(symbol: str) -> Optional[str]` — 繝�繧｣繝�繧ｫ繝ｼ 竊� 10譯� CIK縲らｱｳ蝗ｽ荳雁ｴ縺ｧ縺ｪ縺代ｌ縺ｰ None縲�
+- `recent_filings(symbol: str, forms: tuple[str, ...]=DEFAULT_FORMS, limit: int=10, since: Optional[date]=None) -> dict` — 逶ｴ霑代�ｮ謠仙�ｺ譖ｸ鬘槭ｒ霑斐☆縲�
+- `key_financials(symbol: str) -> dict` — 荳ｻ隕∬ｲ｡蜍咎�逶ｮ縺ｮ**蟷ｴ蠎ｦ**蛟､繧� XBRL 縺九ｉ蜿悶ｋ縲�
 
 ### src.data.embedding_client
 
@@ -1350,6 +1550,22 @@ CSV 縺瑚ｪｭ繧√↑縺�繝ｻ譏守ｴｰ縺瑚ｦ九▽縺九ｉ縺ｪ�
 CSV 縺瑚ｪｭ繧√↑縺�繝ｻ蜿門ｼ募ｱ･豁ｴ縺ｮ隕句�ｺ縺励′隕九▽縺九ｉ縺ｪ縺�縲�
 
 
+### src.data.resolver
+
+螟壽ｮｵ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ隗｣豎ｺ -- 縲悟叙蠕励〒縺阪↑縺九▲縺溘阪〒豁｢繧√↑縺�.
+
+- `resolve(chain: list[tuple[str, Callable[[], Any]]], is_valid: Optional[Callable[[Any], bool]]=None, label: str='') -> dict` — 謇区ｮｵ繧帝�縺ｫ隧ｦ縺励�**譛蛻昴↓謌仙粥縺励◆繧ゅ�ｮ繧定ｿ斐☆**縲�
+- `resolve_price(symbol: str) -> dict` — 萓｡譬ｼ繧偵∽ｽｿ縺医ｋ謇区ｮｵ繧貞�ｨ驛ｨ隧ｦ縺励※蜿悶ｋ縲�
+- `resolve_history(symbol: str, period: str='1y') -> dict` — 萓｡譬ｼ邉ｻ蛻励ＡTicker.history` 縺檎ｩｺ縺ｧ繧� `download` 縺碁壹ｋ縺薙→縺後≠繧九�
+- `resolve_earnings_dates(symbol: str) -> dict` — 豎ｺ邂玲律縲Ｄalendar 竊� earnings_dates 縺ｮ鬆�縺ｫ隧ｦ縺吶�
+- `resolve_fundamentals(symbol: str) -> dict` — 荳ｻ隕√ヵ繧｡繝ｳ繝縲Ｚfinance 縺梧ｬ縺代◆繧� SEC XBRL�ｼ育ｱｳ蝗ｽ譬ｪ縺ｮ縺ｿ�ｼ峨〒陬懊≧縲�
+- `resolve_news(symbol: str, days: int=7, limit: int=3) -> dict` — 繝九Η繝ｼ繧ｹ縲Ｇinnhub�ｼ育ｱｳ蝗ｽ�ｼ俄�� yfinance�ｼ域律邀ｳ荳｡蟇ｾ蠢懶ｼ峨�
+
+#### class Attempt
+1蝗槭�ｮ蜿門ｾ苓ｩｦ陦後�ｮ險倬鹸縲�**菴輔ｒ隧ｦ縺励※菴輔′襍ｷ縺阪◆縺九ｒ谿九☆縲�**
+
+- `as_dict() -> dict`
+
 ### src.data.user_profile
 
 User profile settings loader (KIK-599).
@@ -1381,6 +1597,15 @@ Thread-safe in-memory LRU cache with TTL.
 - `clear() -> None` — Drop all entries and reset stats.
 - `stats() -> dict` — Return hit/miss/size statistics.
 
+### src.data.yahoo_client._net
+
+繝阪ャ繝医Ρ繝ｼ繧ｯ貅門ｙ蠕�縺｡縺ｨ繝ｪ繝医Λ繧､ -- 蜿門ｾ励�ｮ荳譎ょ､ｱ謨励ｒ遒ｺ螳壹↓縺励↑縺�.
+
+- `network_available(timeout: float=3.0) -> bool` — 縺�縺ｾ繝阪ャ繝医Ρ繝ｼ繧ｯ縺ｫ蜃ｺ繧峨ｌ繧九°縲�
+- `wait_for_network(max_wait: Optional[float]=None, quiet: bool=False) -> dict` — 繝阪ャ繝医Ρ繝ｼ繧ｯ縺檎ｹ九′繧九∪縺ｧ蠕�縺､縲�
+- `is_transient(exc: BaseException) -> bool` — 蠕�縺ｦ縺ｰ逶ｴ繧句､ｱ謨励°縲�
+- `with_retry(fn: Callable[[], Any], *, label: str='', attempts: int=DEFAULT_ATTEMPTS, backoff: float=DEFAULT_BACKOFF_SEC, is_empty: Optional[Callable[[Any], bool]]=None, quiet: bool=False) -> tuple[Any, Optional[str]]` — 荳譎ょ､ｱ謨励ｒ繝ｪ繝医Λ繧､縺励※螳溯｡後☆繧九�
+
 ### src.data.yahoo_client._normalize
 
 Internal normalization and sanitization utilities (KIK-449).
@@ -1390,6 +1615,8 @@ Internal normalization and sanitization utilities (KIK-449).
 
 Stock info and detail fetching (KIK-449, KIK-531).
 
+- `last_fetch_error(symbol: str) -> Optional[str]` — 縺昴�ｮ驫俶氛縺ｮ逶ｴ霑代�ｮ蜿門ｾ怜､ｱ謨礼炊逕ｱ縲よ�仙粥縺励※縺�繧後�ｰ None縲�
+- `clear_fetch_errors() -> None`
 - `get_stock_info(symbol: str) -> Optional[dict]` — Fetch basic stock information for a single symbol.
 - `get_multiple_stocks(symbols: list[str]) -> dict[str, Optional[dict]]` — Fetch stock info for multiple symbols with a 1-second delay between requests.
 - `get_stock_detail(symbol: str) -> Optional[dict]` — Fetch detailed stock information including financial statements.
@@ -1474,6 +1701,7 @@ Structure analysis and shareholder-return output formatters (KIK-447, split from
 - `format_runway(bundle: dict) -> str` — 迴ｾ驥代�ｻ騾ｱ谺｡謚戊ｳ�蜿ｯ閭ｽ鬘阪�ｻ繝ｩ繝ｳ繧ｦ繧ｧ繧､繝ｻ迴ｾ驥代�ｮ逶ｮ逧�縲�
 - `format_funding_options(result: dict, target_label: str='') -> str` — (a)螢ｲ蜊ｴ /(b)迴ｾ驥� /(c)蜈･驥大ｾ�縺｡ /(d)隕乗ｨ｡邵ｮ蟆� 縺ｮ豈碑ｼ�縲�
 - `format_attention(budget: dict) -> str`
+- `format_assumption_conflicts(result: Optional[dict]) -> str` — 蜑肴署縺ｮ陦晉ｪ��ｼ域隼蝟�4�ｼ峨�
 - `format_constraints(bundle: dict) -> str` — 蛻ｶ邏�繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ蜈ｨ菴難ｼ育ｬｬ4繧ｻ繧ｯ繧ｷ繝ｧ繝ｳ�ｼ峨ｒ縺ｾ縺ｨ繧√※蜃ｺ縺吶�
 
 ### src.output.forecast_formatter

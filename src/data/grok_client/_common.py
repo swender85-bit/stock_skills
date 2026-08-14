@@ -181,8 +181,39 @@ def _call_grok_api(prompt: str, timeout: int = 30, use_tools: bool = True) -> st
         )
 
         if response.status_code != 200:
+            # サーバが返した理由をそのまま拾う。**これを捨てると原因が分からない。**
+            # 2026-08-06: 403 に「しばらく待ってから再試行」と案内していたため、
+            # 実際は「チームにクレジットが無い」という**待っても直らない**原因の
+            # 特定に手作業の切り分けが必要になった。原因は本文に書いてあった。
+            server_reason = ""
+            try:
+                body = response.json()
+                if isinstance(body, dict):
+                    server_reason = str(body.get("error") or body.get("message") or "")
+            except Exception:
+                server_reason = (response.text or "")[:300]
+
             if not _error_warned[0]:
-                if response.status_code == 401:
+                if response.status_code == 403:
+                    print(
+                        "⚠️  Grok API に拒否されました (HTTP 403 permission-denied)\n"
+                        f"    サーバの理由: {server_reason or '(本文なし)'}\n"
+                        "    よくある原因: チームにクレジットが無い / キーの権限不足\n"
+                        "    対処: https://console.x.ai でクレジットを購入してください\n"
+                        "    ⚠️ これは**待っても直りません**\n"
+                        "    → yfinanceデータのみで実行します",
+                        file=sys.stderr,
+                    )
+                elif response.status_code == 402:
+                    print(
+                        "⚠️  Grok API: 支払いが必要です (HTTP 402)\n"
+                        f"    サーバの理由: {server_reason or '(本文なし)'}\n"
+                        "    対処: https://console.x.ai でクレジットを購入してください\n"
+                        "    ⚠️ これは**待っても直りません**\n"
+                        "    → yfinanceデータのみで実行します",
+                        file=sys.stderr,
+                    )
+                elif response.status_code == 401:
                     print(
                         "\u26a0\ufe0f  Grok API\u8a8d\u8a3c\u30a8\u30e9\u30fc\n"
                         "    \u539f\u56e0: API\u30ad\u30fc\u304c\u7121\u52b9\u307e\u305f\u306f\u671f\u9650\u5207\u308c\u306e\u53ef\u80fd\u6027\u304c\u3042\u308a\u307e\u3059\n"
@@ -201,6 +232,7 @@ def _call_grok_api(prompt: str, timeout: int = 30, use_tools: bool = True) -> st
                 else:
                     print(
                         f"\u26a0\ufe0f  Grok API\u30a8\u30e9\u30fc (HTTP {response.status_code})\n"
+                        f"    \u30b5\u30fc\u30d0\u306e\u7406\u7531: {server_reason or '(\u672c\u6587\u306a\u3057)'}\n"
                         "    \u5bfe\u51e6: \u3057\u3070\u3089\u304f\u5f85\u3063\u3066\u304b\u3089\u518d\u8a66\u884c\u3057\u3066\u304f\u3060\u3055\u3044\n"
                         "    \u2192 yfinance\u30c7\u30fc\u30bf\u306e\u307f\u3067\u5b9f\u884c\u3057\u307e\u3059",
                         file=sys.stderr,
@@ -209,12 +241,18 @@ def _call_grok_api(prompt: str, timeout: int = 30, use_tools: bool = True) -> st
             # KIK-431: track error type by status code
             if response.status_code == 401:
                 _error_state["status"] = "auth_error"
+            elif response.status_code in (402, 403):
+                # \u5f85\u3063\u3066\u3082\u76f4\u3089\u306a\u3044\u7a2e\u985e\u3002rate_limited \u3068\u6df7\u305c\u308b\u3068\u8aa4\u3063\u305f\u518d\u8a66\u884c\u3092\u8a98\u3046\u3002
+                _error_state["status"] = "no_credits"
             elif response.status_code == 429:
                 _error_state["status"] = "rate_limited"
             else:
                 _error_state["status"] = "other_error"
             _error_state["status_code"] = response.status_code
-            _error_state["message"] = f"HTTP {response.status_code}"
+            _error_state["message"] = (
+                f"HTTP {response.status_code}"
+                + (f": {server_reason}" if server_reason else "")
+            )
             return ""
 
         data = response.json()

@@ -35,8 +35,17 @@ MEASURABLE_METRICS: dict[str, str] = {
     "operating_cf": "営業キャッシュフロー",
     "operating_margin": "営業利益率(%)",
     "position_weight_pct": "PF内の構成比(%)",
+    "position_value_jpy": "そのポジションの評価額(円)",
     "days_held": "保有日数",
 }
+
+#: 意図的不作為だけはトリガー無しで登録できる。
+#:
+#: 「評価額1億円まで売らない」「NISA分は永久保有」「DCAは無条件継続」のような
+#: 政策は、**どの状態変化にも反応しないことが政策の中身**である。ここにダミーの
+#: トリガーを付けさせると、政策台帳が嘘をつく（反応しないものを反応するように書く）。
+#: 意図的不作為は正当な意思決定であり、後から「決めた通りに動けたか」を測れる。
+DELIBERATE_INACTION = "deliberate_inaction"
 
 #: 比較演算子
 OPERATORS = ("<", "<=", ">", ">=", "==")
@@ -173,9 +182,14 @@ def build_policy(
         raise ValueError(f"失効期限が過去または当日です: {expiry.isoformat()}")
 
     if not triggers:
-        raise AmbiguousTriggerError("政策にはトリガーが最低1つ必要です。")
-    normalized = [validate_trigger(t) for t in triggers]
-    _check_trigger_conflicts(normalized)
+        # 意図的不作為は「どの状態にも反応しない」ことが政策の中身なので、
+        # ダミーのトリガーを付けさせると台帳が嘘をつく。ここだけ空を許す。
+        if intent != DELIBERATE_INACTION:
+            raise AmbiguousTriggerError("政策にはトリガーが最低1つ必要です。")
+        normalized: list[dict] = []
+    else:
+        normalized = [validate_trigger(t) for t in triggers]
+        _check_trigger_conflicts(normalized)
 
     return {
         "id": f"pol_{ts['utc'][:10]}_{symbol.replace('.', '_')}_{uuid.uuid4().hex[:8]}",

@@ -211,11 +211,18 @@ def classify_quantity_diff(
 
 
 def _load_intent(symbol: Optional[str], name: Optional[str]) -> dict:
-    """この銘柄に thesis / 政策 があるか。無ければ孤児候補。"""
+    """この銘柄に thesis / 政策 があるか。無ければ孤児候補。
+
+    ティッカーの無い投信（FANG+ 等）は `symbol` が None で来る。名前も候補に
+    入れないと、**投信は thesis を書いても政策を登録しても永久に孤児のまま**になり、
+    孤児率が構造的に下がらない。実際 FANG+ は評価額の 7% を占めている。
+    """
     theses: list[dict] = []
     policies: list[dict] = []
 
     candidates = [c for c in (symbol, normalize_symbol(symbol)) if c]
+    if not symbol and name:
+        candidates.append(str(name).strip())
     # `7203` 形式でメモが書かれている場合も拾う（表記揺れで孤児を誤検出しない）
     try:
         from src.data.note_manager import load_notes
@@ -371,6 +378,10 @@ def reconcile(
         })
 
     orphans = _find_orphans(model, values, total_jpy) if check_intent else []
+    # 記述状態の4分類（V0）。孤児だけを数えると「政策はあるが理由がない」
+    # 保有を見落とす。表示すべきは「孤児0件」ではなく「健全0件」。
+    description = (describe_positions(model, values, total_jpy)
+                   if check_intent else None)
 
     unknown = [d for d in diffs if d.get("classification") == "unknown"]
     blocking = bool(unknown or ghosts or unrecorded) or not reconcilable
@@ -400,6 +411,7 @@ def reconcile(
         "independently_verified": bool(independent),
         "scope": sorted(scope),
         "sources": [_source_view(s) for s in snaps],
+        "description": description,
         "counts": {
             "model": len(model),
             "broker": len(broker),
@@ -446,8 +458,41 @@ def _brief(entry: dict, values: dict, total_jpy: Optional[float]) -> dict:
     }
 
 
+def describe_positions(model: dict, values: dict,
+                       total_jpy: Optional[float]) -> dict:
+    """保有の記述状態を4分類する（読書台帳仕様 v2 の V0）。
+
+    🔴 `_find_orphans` は「thesis も政策も無い」というAND条件だったため、
+    政策だけがある保有（3xスリーブ・FANG+）を**非孤児として通過させていた**。
+    その結果「孤児0件」と表示しつつ、同じレポートの別の節に
+    「thesis は2件しか存在しない」と書くという自己矛盾が起きていた。
+
+    正しい表示は「孤児0件」ではなく**「健全0件」**である。
+    詳細は `src/core/portfolio/description_state.py`。
+    """
+    from src.core.portfolio import description_state
+
+    rows = []
+    for key, m in model.items():
+        intent = _load_intent(m.get("symbol"), m.get("name"))
+        brief = _brief(m, values, total_jpy)
+        rows.append({
+            "symbol": m.get("symbol"),
+            "name": m.get("name"),
+            "account": m.get("account"),
+            "weight_pct": brief.get("weight_pct"),
+            "intent": intent,
+        })
+    return description_state.describe(rows)
+
+
 def _find_orphans(model: dict, values: dict, total_jpy: Optional[float]) -> list[dict]:
-    """thesis も政策も無い保有 = 孤児ポジション。"""
+    """thesis も政策も無い保有 = 完全孤児。
+
+    ⚠️ **この関数だけを「なぜ持つかの記述がある」の判定に使ってはならない。**
+    政策だけがある保有（根拠なき執行）をここは拾わない。
+    全体像は `describe_positions()` を使うこと。後方互換のため残している。
+    """
     out: list[dict] = []
     for key, m in model.items():
         intent = _load_intent(m.get("symbol"), m.get("name"))

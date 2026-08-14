@@ -112,9 +112,156 @@ def test_build_symbol_briefing_graceful(monkeypatch):
     monkeypatch.setattr(bp, "_safe_news_watch", lambda syms: {})
     monkeypatch.setattr(bp, "_safe_moomoo", lambda syms: {})
     monkeypatch.setattr(bp, "_safe_context", lambda q: "")
+    # ⚠️ 判断層（ルックスルー・構成銘柄・前方カレンダー・レジーム・一次観測…）は
+    # あとから足されたが、このテストは塞いでいなかった。**「fully mocked」と
+    # 名乗りながら実際には yfinance を叩き、この1件だけで80秒かかっていた**。
+    # 遅いだけでなく、ネットワークの調子で結果が変わる＝回帰テストにならない。
+    for name, empty in (
+        ("_safe_symbol_lookthrough", {}), ("_safe_constituent_intel", {}),
+        ("_safe_forward_horizon", {}), ("_safe_leverage_sleeve", {}),
+        ("_safe_regime", {}), ("_safe_primary_filings", {}),
+        ("_safe_external_views", {}), ("_safe_falsification", {}),
+        ("_safe_symbol_policy", {}), ("_safe_assumption_space_for", {}),
+        ("_safe_narrative", {}),
+    ):
+        monkeypatch.setattr(bp, name, (lambda v: lambda *a, **k: v)(empty))
+    monkeypatch.setattr(bp, "_closes_1y", lambda s: [])
+    monkeypatch.setattr(
+        "src.core.risk.forward_events.build_forward_section", lambda h: {})
+
+    monkeypatch.setattr(bp, "_safe_composition_check", lambda: {})
 
     pack = bp.build_symbol_briefing("7203.T")
     assert pack["mode"] == "symbol"
     assert pack["meta"]["symbol"] == "7203.T"
     assert pack["pack_version"] == bp.PACK_VERSION
     assert pack["info"]["name"] == "Toyota"
+    # 見通しの材料は、履歴が取れなくても必ずキーとして存在する
+    assert "projection" in pack
+
+
+def test_symbol_pack_provides_every_field_the_prompt_promises():
+    """`stock_deep.md` の材料表に載っている材料が、実際にパックに入っていること。
+
+    **表に書いてあるのに入っていない材料があった**（`composition_check`）。
+    仕様が「これを読め」と書いていても、材料が来なければ指示は空振りする。
+    """
+    import inspect
+    import re
+
+    spec = Path(".claude/prompts/stock_deep.md").read_text(encoding="utf-8")
+    promised = set(re.findall(r"^\| `([a-z_]+)` \|", spec, re.M))
+    assert len(promised) >= 10, "材料表を読めていない（正規表現が壊れた）"
+
+    src = inspect.getsource(bp.build_symbol_briefing)
+    returned = set(re.findall(r'^\s+"([a-z_]+)":', src, re.M))
+    missing = sorted(promised - returned)
+    assert not missing, f"仕様が約束しているのにパックに無い材料: {missing}"
+
+
+class TestSymbolComposition:
+    def test_matches_fund_by_name_variant(self):
+        """投信はティッカーを持たないことがあるので名前で照合する。"""
+        assert bp._matches_fund("iFreeNEXT FANG+", None,
+                                "iFreeNEXT FANG+インデックス")
+
+    def test_unrelated_symbol_is_not_matched(self):
+        assert not bp._matches_fund("iFreeNEXT FANG+", "7203.T", "トヨタ自動車")
+
+    def test_non_fund_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(
+            bp, "_safe_composition_check",
+            lambda: {"iFreeNEXT FANG+": {"available": True}})
+        assert bp._safe_symbol_composition("7203.T", "トヨタ自動車") == {}
+
+    def test_fund_gets_only_its_own_check(self, monkeypatch):
+        monkeypatch.setattr(
+            bp, "_safe_composition_check",
+            lambda: {"iFreeNEXT FANG+": {"available": True, "correlation": 0.92},
+                     "他の投信": {"available": True}})
+        got = bp._safe_symbol_composition(None, "iFreeNEXT FANG+インデックス")
+        assert list(got) == ["iFreeNEXT FANG+"]
+
+    def test_error_is_not_silently_empty(self, monkeypatch):
+        """検証に失敗したことを「対象外」と同じ空で返さない。"""
+        monkeypatch.setattr(
+            bp, "_safe_composition_check", lambda: {"_error": "boom"})
+        assert "_error" in bp._safe_symbol_composition("X", "X")
+
+
+# --- _safe_symbol_projection -------------------------------------------------
+#
+# 「これから」を書く節の材料。**点推定ではなくレンジ**であることと、
+# 取得できなかったときに「変動しない」と読ませないことを縛る。
+
+
+class TestSymbolProjection:
+    @pytest.fixture(autouse=True)
+    def _no_network(self, monkeypatch):
+        """履歴取得を閉じる。**較正の有無ではなくレンジの形を試す**テスト群なので、
+        ここで実際に yfinance を叩くとテストが数十秒かかり、しかも
+        取得結果によって結果が変わる（＝回帰テストにならない）。"""
+        monkeypatch.setattr(bp, "_closes_1y", lambda s: [])
+
+    def test_returns_all_horizons_in_order(self):
+        got = bp._safe_symbol_projection("QCOM", {"leverage": 1}, None)
+        assert got["available"] is True
+        assert [h["key"] for h in got["horizons"]] == [
+            "short", "quarter", "mid", "long"]
+
+    def test_basis_is_index_not_money(self):
+        """金額で返すと『いくら儲かる』と読まれる。非保有銘柄にも答えるので倍率で語る。"""
+        got = bp._safe_symbol_projection("QCOM", {}, None)
+        assert "100" in got["basis"]
+        for h in got["horizons"]:
+            assert h["low_pct"] < h["high_pct"]
+
+    def test_leverage_widens_the_range_and_adds_drag(self):
+        one = bp._safe_symbol_projection("SOXL", {"leverage": 1}, None)
+        three = bp._safe_symbol_projection("SOXL", {"leverage": 3}, None)
+        assert three["drag_pct"] > one["drag_pct"]
+        w1 = one["horizons"][0]["high_pct"] - one["horizons"][0]["low_pct"]
+        w3 = three["horizons"][0]["high_pct"] - three["horizons"][0]["low_pct"]
+        assert w3 > w1
+
+    def test_vol_source_is_disclosed(self):
+        """前提σを使ったのか較正済みσを使ったのかを黙らない。"""
+        got = bp._safe_symbol_projection("QCOM", {}, None)
+        assert got["vol_source"]
+
+    def test_failure_does_not_read_as_no_movement(self, monkeypatch):
+        monkeypatch.setattr(
+            bp, "_closes_1y",
+            lambda s: (_ for _ in ()).throw(RuntimeError("boom")))
+        got = bp._safe_symbol_projection("QCOM", {}, None)
+        assert got["available"] is False
+        assert "変動しない" in got["note"]  # 誤読を明示的に否定している
+
+
+class TestCloses1y:
+    def test_series_truthiness_is_not_used(self, monkeypatch):
+        """⚠️ `hist.get("Close") or []` は pandas で ValueError になる。
+
+        そこで黙って握り潰されると実測σが**前提σへ静かに退化**する。
+        実際に起きた事故なので、DataFrame を渡して値が返ることを固定する。
+        """
+        pd = pytest.importorskip("pandas")
+        import src.data.yahoo_client as yc
+
+        df = pd.DataFrame({"Close": [100.0, 101.0, 99.5]})
+        monkeypatch.setattr(yc, "get_price_history", lambda s, period="1y": df)
+        assert bp._closes_1y("QCOM") == [100.0, 101.0, 99.5]
+
+    def test_drops_non_positive_and_nan(self, monkeypatch):
+        pd = pytest.importorskip("pandas")
+        import src.data.yahoo_client as yc
+
+        df = pd.DataFrame({"Close": [100.0, float("nan"), 0.0, -5.0, 102.0]})
+        monkeypatch.setattr(yc, "get_price_history", lambda s, period="1y": df)
+        assert bp._closes_1y("QCOM") == [100.0, 102.0]
+
+    def test_missing_history_is_empty_not_error(self, monkeypatch):
+        import src.data.yahoo_client as yc
+
+        monkeypatch.setattr(yc, "get_price_history", lambda s, period="1y": None)
+        assert bp._closes_1y("QCOM") == []

@@ -1,0 +1,54 @@
+# 節ごとの synthesis モデル配分 (改善2 / cwc-workshops `rightmodel`)
+#
+# ⚠️ 実測されるまで、ここは**意図的に空**です。
+#
+# 従来は全節を同じモデル（既定 opus）で回していました。それが正しいという証拠は
+# 無く、同時に**間違っているという証拠もありません**。推測でモデルを落とすと、
+# どの節が劣化したのか分からないまま品質が下がります。
+#
+# 埋め方:
+#
+#   python scripts/eval_synthesis.py --sweep --models haiku,sonnet,opus \
+#       --sections 0,1,2,3,4 --fixtures pack_quiet_week,pack_circular
+#
+#   → data/synthesis_evals/sweep_YYYYMMDD.json と比較表が出ます。
+#   → **通過率が同じなら安い方**を sections: に書き、measured_as_of を入れてください。
+#
+# 選定規約（.claude/rules/weekly-report.md にも記載）:
+#   1. 通過率が同じなら安い方を選ぶ
+#   2. ただし critical_sections（節1 照合 / 節6 事前決定）は通過率100%を必須とする
+#   3. measured_as_of が空のあいだ、critical_sections は default から下げない
+#      （resolve_section_model() がこれを強制します）
+
+meta:
+  note: |
+    節ID は scripts/weekly_deep_driver.py の build_sections() が付けるもの。
+    verdict / reconcile / belief / forward / constraints / opportunity /
+    holding_* / heat / outlook / decide / audit / limits
+  cost_note: |
+    スイープは API コストがかかります。節×モデル×fixture の全組み合わせを毎回
+    回すのは高いので、まず節0〜4だけ・fixture 2種から試してください。
+
+# 実測した日。空のあいだは critical_sections が既定から下がりません。
+measured_as_of: null
+
+# 全節の既定。CLI の --model / 環境変数 WEEKLY_DEEP_MODEL より優先されます。
+default: opus
+
+# 通過率100%を必須とする節（安い方に落とさない）
+critical_sections:
+  - reconcile
+  - decide
+
+# 節ID → モデル。実測後にここを埋める。
+# 例（実測が出るまでコメントのまま）:
+#   verdict: haiku
+#   belief: sonnet
+#   audit: haiku
+sections: {}
+
+# 節kind → モデル。個別IDが無いときのフォールバック。
+# holding_* は銘柄数だけ増えるので、ID ではなく kind で指定するのが実用的。
+# 例:
+#   holding: sonnet
+kinds: {}

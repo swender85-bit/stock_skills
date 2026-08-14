@@ -4,8 +4,8 @@
 #    手で直してもよいが、次の取り込みで上書きされる。
 #
 # 出典: 楽天証券「保有商品一覧（すべて）」CSV
-#   assetbalance(all)_20260802_154844.csv
-#   取り込み日時: 2026-08-02T06:48:47+00:00
+#   assetbalance(all)_20260809_151818.csv
+#   取り込み日時: 2026-08-09T06:18:20+00:00
 #
 # ■ 何が自動で、何が手動か
 #   保有構成（銘柄・数量・取得単価） … このCSVを投げたときだけ更新
@@ -23,15 +23,8 @@
 base_currency: JPY
 fx:
   usdjpy_symbol: JPY=X
-  fallback_rate: 157.81
+  fallback_rate: 157.8
 holdings:
-- name: トーメンデバイス
-  quote_symbol: 2737.T
-  account: 特定
-  shares: 40
-  cost_price: 14230.0
-  currency: JPY
-  category: 日本・半導体商社
 - name: 味の素
   quote_symbol: 2802.T
   account: 特定
@@ -94,19 +87,19 @@ holdings:
 - name: iFreeNEXT FANG+インデックス
   quote_symbol: null
   account: NISAつみたて
-  shares: 149927
-  cost_price: 73369.04
+  shares: 155245
+  cost_price: 74076.46
   currency: JPY
   unit_divisor: 10000
   category: 米国グロース投信
   note: ¥5万/月の積立(DCA)継続中。壊れない1倍の保険コア、非売却。
-  last_known_price: 91805
+  last_known_price: 98332
 cash:
 - name: 米ドル
-  amount: 63.07
+  amount: 64.12
   currency: USD
   note: 2026/7/23時点でほぼ残高なし。INTC弾は MDT/QCOM 取得に投入済み。
 source:
   type: rakuten_csv
-  file: assetbalance(all)_20260802_154844.csv
-  exported_at: '2026-08-02T06:48:47+00:00'
+  file: assetbalance(all)_20260809_151818.csv
+  exported_at: '2026-08-09T06:18:20+00:00'

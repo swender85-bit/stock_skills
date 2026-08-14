@@ -129,7 +129,11 @@ def resolve_technical_proxy(symbol: Optional[str], name: Optional[str] = None,
         if str(key).strip() and str(key).strip() in str(name or ""):
             proxy = str(e.get("proxy") or "").strip()
             if proxy:
-                return {"proxy": proxy, "note": e.get("note"),
+                return {"proxy": proxy,
+                        # §16-8: 単一の取得元に依存しない。指数が引けなかった週に
+                        # 「判定不能」で終わらせないための予備。
+                        "fallback": str(e.get("fallback") or "").strip() or None,
+                        "note": e.get("note"),
                         "matched": key, "approximate": True}
     return None
 
@@ -229,6 +233,85 @@ def fetch_holdings(ticker: str, *, cfg: Optional[dict] = None,
 # ---------------------------------------------------------------------------
 
 
+#: セクターコードの読み下し
+_SECTOR_JP = {
+    "technology": "テクノロジー", "communication_services": "通信サービス",
+    "consumer_cyclical": "一般消費財", "consumer_defensive": "生活必需品",
+    "healthcare": "ヘルスケア", "financial_services": "金融",
+    "industrials": "資本財", "energy": "エネルギー", "utilities": "公益",
+    "basic_materials": "素材", "realestate": "不動産",
+}
+
+_sector_cache: dict[str, dict] = {}
+
+
+def fetch_sector_weights(lookup: str, use_cache: bool = True) -> dict:
+    """ETF のセクター構成（**100% をカバーする**）。
+
+    上位10銘柄しか取れない制約を、セクター構成で補う。
+    「残り40%が何なのか」に答えられるのはこれだけ。
+    """
+    if use_cache and lookup in _sector_cache:
+        return _sector_cache[lookup]
+    try:
+        import yfinance as yf
+
+        raw = yf.Ticker(lookup).funds_data.sector_weightings
+        out = {k: round(float(v) * 100.0, 2)
+               for k, v in (raw or {}).items() if float(v) > 0}
+    except Exception:
+        out = {}
+    if use_cache:
+        _sector_cache[lookup] = out
+    return out
+
+
+def _top_sectors(sectors: dict, limit: int = 3) -> str:
+    if not sectors:
+        return ""
+    top = sorted(sectors.items(), key=lambda kv: -kv[1])[:limit]
+    return "、".join(f"{_SECTOR_JP.get(k, k)} {v:.1f}%" for k, v in top)
+
+
+def _explicit_constituents(name: Optional[str], cfg: dict) -> Optional[dict]:
+    """設定に明示された構成銘柄。名前の前方一致で引く。
+
+    `verified_as_of` が空でも使う。**QQQ 近似より遥かに正確**だから。
+    ただし未確認であることは出力に必ず出す（黙って確定値のように扱わない）。
+    """
+    table = cfg.get("explicit_constituents") or {}
+    label = str(name or "").strip()
+    if not label or not table:
+        return None
+
+    entry = None
+    for key, value in table.items():
+        if label.startswith(str(key)) or str(key) in label:
+            entry = value
+            break
+    if not isinstance(entry, dict):
+        return None
+
+    symbols = [str(s).strip().upper() for s in (entry.get("symbols") or []) if s]
+    if not symbols:
+        return None
+
+    if str(entry.get("weighting") or "equal") == "equal":
+        share = 100.0 / len(symbols)
+        holdings = [{"symbol": s, "weight_pct": share} for s in symbols]
+    else:
+        weights = entry.get("weights") or {}
+        holdings = [{"symbol": s, "weight_pct": float(weights.get(s, 0.0))}
+                    for s in symbols]
+
+    return {
+        "holdings": holdings,
+        "weighting": entry.get("weighting") or "equal",
+        "source": entry.get("source"),
+        "verified_as_of": entry.get("verified_as_of"),
+    }
+
+
 def build_lookthrough(holdings: list[dict], *,
                       cfg: Optional[dict] = None,
                       use_cache: bool = True) -> dict:
@@ -262,6 +345,37 @@ def build_lookthrough(holdings: list[dict], *,
                 _add(effective, key, weight * lev, "direct", sym or key)
             continue
 
+        # 明示的な構成が設定されていれば proxy より優先する。
+        # FANG+ を QQQ で近似すると、10銘柄等ウェイトが100銘柄時価総額加重に
+        # すり替わり、実効エクスポージャーが歪む。
+        explicit = _explicit_constituents(name, cfg)
+        if explicit:
+            for row in explicit["holdings"]:
+                _add(effective, row["symbol"],
+                     weight * row["weight_pct"] / 100.0 * lev, "via_etf", sym or name)
+            resolved.append({
+                "symbol": sym, "name": name, "weight_pct": weight,
+                "lookup": "(明示指定)", "leverage": lev,
+                "underlying": explicit.get("source"),
+                "approximate": not explicit.get("verified_as_of"),
+                "coverage_pct": 100.0,
+                "components": len(explicit["holdings"]),
+                "residual_pct": 0.0,
+                "residual_effective_pct": 0.0,
+                "sectors": {},
+                "explicit": True,
+                "verified_as_of": explicit.get("verified_as_of"),
+                "residual_note": (
+                    f"構成を明示指定（{explicit.get('weighting')}・"
+                    f"{len(explicit['holdings'])}銘柄）。"
+                    + ("✅ 確認済み: " + str(explicit["verified_as_of"])
+                       if explicit.get("verified_as_of") else
+                       "⚠️ **未確認の構成です。** 運用会社の月次レポートで確認し、"
+                       "`config/etf_lookthrough.yaml` の `verified_as_of` を入れてください。")
+                ),
+            })
+            continue
+
         lookup = target.get("lookup")
         if not lookup:
             unresolved.append({"symbol": sym, "name": name, "weight_pct": weight,
@@ -281,6 +395,14 @@ def build_lookthrough(holdings: list[dict], *,
             _add(effective, row["symbol"], weight * inner_w / 100.0 * lev,
                  "via_etf", sym or name)
 
+        # 未展開部分（上位10銘柄の外）が何なのかを、セクター構成で埋める。
+        # yfinance の top_holdings は**10銘柄が上限**で、SOXX なら 39.5%、
+        # QQQ なら 53.7% が見えないまま残る。そこを空白にしておくと
+        # 「上位10銘柄＝そのETFのすべて」と誤読される。
+        coverage = _num(comp.get("coverage_pct")) or 0.0
+        residual_pct = max(0.0, 100.0 - coverage)
+        sectors = fetch_sector_weights(lookup, use_cache=use_cache)
+
         resolved.append({
             "symbol": sym, "name": name, "weight_pct": weight,
             "lookup": lookup, "leverage": lev,
@@ -288,6 +410,17 @@ def build_lookthrough(holdings: list[dict], *,
             "approximate": target.get("approximate"),
             "coverage_pct": comp.get("coverage_pct"),
             "components": len(comp["holdings"]),
+            # 上位10銘柄で捉えられていない部分
+            "residual_pct": round(residual_pct, 2),
+            "residual_effective_pct": round(weight * residual_pct / 100.0 * lev, 3),
+            "sectors": sectors,
+            "residual_note": (
+                f"上位{len(comp['holdings'])}銘柄で {coverage:.1f}% を展開。"
+                f"**残り {residual_pct:.1f}% は個別に見えていません**"
+                f"（実質 {weight * residual_pct / 100.0 * lev:.2f}% 相当）。"
+                + (f" セクター構成: {_top_sectors(sectors)}" if sectors else
+                   " セクター構成も取得できませんでした。")
+            ),
         })
 
     rows = sorted(effective.values(), key=lambda r: -r["effective_pct"])

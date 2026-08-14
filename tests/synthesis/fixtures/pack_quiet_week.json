@@ -1,0 +1,112 @@
+{
+  "pack_version": 2,
+  "mode": "portfolio",
+  "_fixture_note": "静穏週。要対応0件・照合一致・孤児なし・取得失敗なし。レポートは30行以内で終わるのが正解。",
+  "meta": {
+    "as_of": "2026-08-01",
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "holdings_source": "rakuten_csv",
+    "holdings_import": {"type": "assetbalance", "exported_at": "2026-07-30", "file": "assetbalance(all)_20260730.csv"},
+    "fx_rate": 161.4,
+    "warnings": []
+  },
+  "information": {
+    "verdict": "静穏週",
+    "quiet": true,
+    "actionable": [],
+    "actionable_count": 0,
+    "changed_count": 0,
+    "checked_count": 42,
+    "folded_count": 11,
+    "guidance": "先週からの実質的な変化はありません。今週は何もしないことが正しい選択です。"
+  },
+  "reconciliation": {
+    "as_of": "2026-08-01",
+    "status": "ok",
+    "blocking": false,
+    "reconcilable": true,
+    "independently_verified": true,
+    "model_source": "rakuten_csv(2026-07-30) / reconcile は取り込み前に実行済み",
+    "counts": {"model": 4, "broker": 4, "matched": 4, "diffs": 0, "ghosts": 0, "unrecorded": 0, "unverified": 0, "orphans": 0},
+    "diffs": [],
+    "unknown_diffs": [],
+    "ghosts": [],
+    "unrecorded": [],
+    "unverified": [],
+    "corporate_actions": [],
+    "orphans": [],
+    "orphan_burden_pct": 0.0,
+    "messages": ["口座と模型は一致しています（独立検証済み）。"]
+  },
+  "falsification": {
+    "falsified": [],
+    "near": [],
+    "unchecked": [],
+    "missing": [],
+    "intact": 4,
+    "checked": 4,
+    "total": 4,
+    "note": "反証条件に抵触した保有はありません。"
+  },
+  "forward": {
+    "generated_at": "2026-08-01T21:12:00+00:00",
+    "errors": [],
+    "calendar": {"range": "2026-08-03/2026-08-09", "as_of": "2026-08-01", "events": [], "folded": [], "unavailable_symbols": [], "note": "翌週に確定イベントはありません。"},
+    "concentration": {"available": true, "pct": 0.0, "level": "ok"},
+    "policy_gaps": {"gaps": [], "covered": ["2802.T", "SOXL"], "message": "翌週決算を迎える銘柄はすべて政策が定義済みです。"},
+    "dividend_drops": [],
+    "monday_outlook": {"available": true, "note": "先物は小動き。予測ではなく市場の織り込み。"},
+    "schedule_changes": [],
+    "triggers": {"available": true, "approaching": [], "met": [], "checked": 6, "message": "トリガー接近・成立はありません。"},
+    "actionable": []
+  },
+  "constraints": {
+    "tax_state": {"realized_pl_jpy": 0, "recorded": true, "nisa_used_estimate": {"value": 600000, "reliable": true}, "warnings": []},
+    "runway_bundle": {"cash_jpy": 380000, "weekly_investable_jpy": 50000, "purpose_assigned": true},
+    "attention": {"holdings": 4, "orphans": 0, "minutes_per_holding": 15, "effective_watch": 4},
+    "loss_harvest": {"available": true, "candidates": []},
+    "liquidity": {"errors": [], "liquidity": {"profiles": [], "trapped": []}},
+    "errors": []
+  },
+  "execution_audit": {
+    "window_days": 90,
+    "executions_available": true,
+    "survival": {"available": true, "total": 12, "executed": 9, "unexecuted": 3, "rate": 0.75},
+    "shortfall": {"available": true, "bps": -12.0},
+    "performance": {"available": true},
+    "reasons": [],
+    "errors": []
+  },
+  "model_audit": {
+    "errors": [],
+    "score": {"available": true, "weeks": 28, "min_weeks": 26, "bias": null},
+    "missing_factor": []
+  },
+  "week_diff": {"changed": [], "folded": ["2802.T", "SOXL", "TECL", "9843.T"]},
+  "cumulative_diff": {"available": false, "weeks": 4, "reason": "4週分の蓄積が必要です。"},
+  "narrative": {"crowding": {}},
+  "portfolio": {"total_jpy": 19800000, "cash_jpy": 380000, "total_pl_jpy": 8100000, "pl_pct": 69.2},
+  "holdings": [
+    {"name": "味の素", "symbol": "2802.T", "account": "特定", "shares": 400, "cost_price": 3906.03, "price": 5102, "price_source": "yfinance", "currency": "JPY", "value_jpy": 2040800, "pl_jpy": 478385, "pl_pct": 30.6, "weight_pct": 10.3, "week_change_pct": 0.4, "leverage": 1,
+     "fundamentals": {"per": 21.4, "pbr": 2.9, "roe": 0.14, "revenue_growth": 0.05, "earnings_growth": 0.08, "sector": "Consumer Defensive", "is_etf": false},
+     "technicals": {"last": 5102, "rsi14": 51.2, "percent_b": 0.48, "range_52w_position": 0.55, "sma200_deviation_pct": 1.1, "heat_state": "neutral"}},
+    {"name": "Direxion デイリー 半導体株 ブル 3倍 ETF", "symbol": "SOXL", "account": "特定", "shares": 275, "cost_price": 29.7495, "price": 160.99, "price_source": "yfinance", "currency": "USD", "value_jpy": 7146000, "pl_jpy": 5960000, "pl_pct": 441.2, "weight_pct": 36.1, "week_change_pct": -0.6, "leverage": 3,
+     "fundamentals": {"is_etf": true, "expense_ratio": 0.0075},
+     "technicals": {"last": 160.99, "rsi14": 48.0, "percent_b": 0.41, "range_52w_position": 0.42, "sma200_deviation_pct": -3.2, "heat_state": "neutral"}}
+  ],
+  "indices": {},
+  "holding_news": {},
+  "market_news": [],
+  "moomoo": {},
+  "forward_schedule": [],
+  "schedule_status": {
+    "2802.T": {"symbol": "2802.T", "name": "味の素", "fetched": true, "source": "yfinance", "status": "none_upcoming", "next_earnings": "2026-11-05", "label": "取得済み。翌週に予定はありません。"},
+    "SOXL": {"symbol": "SOXL", "name": "SOXL", "fetched": true, "source": "yfinance", "status": "no_earnings", "label": "ETF なので決算はありません。"}
+  },
+  "projection": {},
+  "scenarios": [],
+  "positions_assumptions": {},
+  "vol_calibration": {"available": true, "entries": []},
+  "monthly_contribution": 50000,
+  "prior_context": {"theses": [], "concerns": [], "lessons": []}
+}

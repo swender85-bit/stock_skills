@@ -1,31 +1,33 @@
 @echo off
 REM ===================================================================
-REM  週次ポートフォリオ分析レポート — Windows タスクスケジューラ用ランナー
+REM  Weekly portfolio report (legacy thin version) - task runner.
 REM
-REM  毎週土曜の朝に実行し、その週の最終終値を反映したレポートを
-REM  Obsidian vault (投資記録) に出力する。
+REM  Runs Saturday morning and writes a report reflecting the week's
+REM  final closes into the Obsidian vault.
 REM
-REM  登録コマンド（管理者不要）:
-REM    schtasks /Create /TN "StockSkills\WeeklyReport" /SC WEEKLY /D SAT 
-REM             /ST 07:12 /TR "C:\Users\swend\stock_skills\scripts\run_weekly_report.bat" /F
+REM  ASCII ONLY. DO NOT PUT JAPANESE OR BACKTICKS IN THIS FILE.
+REM  cmd.exe parses .bat using the OEM code page (cp932 here), not UTF-8.
+REM  Multi-byte comment text corrupts the line structure and comment text
+REM  can leak out and get EXECUTED. See run_weekly_deep.bat for the real
+REM  incident this caused. tests/test_bat_encoding.py guards it.
 REM
-REM  手動テスト:
-REM    schtasks /Run /TN "StockSkills\WeeklyReport"
+REM  Register (no admin required):
+REM    schtasks /Create /TN "StockSkills\WeeklyReport" /SC WEEKLY /D SAT /ST 07:12 /TR "C:\Users\swend\stock_skills\scripts\run_weekly_report.bat" /F
 REM
-REM  ログ: output\weekly_report.log （毎回追記）
+REM  Manual test:  schtasks /Run /TN "StockSkills\WeeklyReport"
+REM  Log:          output\weekly_report.log  (appended every run)
 REM ===================================================================
 
 setlocal
 
-REM このバッチ自身が UTF-8 で書かれているため、コンソールも UTF-8 にする。
-REM これを入れないと echo の日本語がログ内で文字化けする。
+REM The Python side emits UTF-8, so switch the console to UTF-8 too.
 chcp 65001 >nul
 
-REM 日本語・絵文字が cp932 で落ちないようにする
+REM Keep Japanese and emoji from dying under cp932 on the Python side.
 set PYTHONIOENCODING=utf-8
 set PYTHONUTF8=1
 
-REM moomoo(OpenD) 無人インサイト取得を有効化
+REM Enable unattended moomoo (OpenD) insight collection
 set MOOMOO_ENABLED=on
 
 set REPO=C:\Users\swend\stock_skills
@@ -36,15 +38,15 @@ if not exist "%REPO%\output" mkdir "%REPO%\output"
 
 echo. >> "%LOG%"
 echo ================================================== >> "%LOG%"
-echo [%date% %time%] 週次レポート開始 >> "%LOG%"
+echo [%date% %time%] weekly report start >> "%LOG%"
 
 python "%REPO%\scripts\weekly_report.py" >> "%LOG%" 2>&1
 set RC=%ERRORLEVEL%
 
 if %RC%==0 (
-    echo [%date% %time%] 完了 >> "%LOG%"
+    echo [%date% %time%] done >> "%LOG%"
 ) else (
-    echo [%date% %time%] 失敗 exit=%RC% >> "%LOG%"
+    echo [%date% %time%] failed exit=%RC% >> "%LOG%"
 )
 
 endlocal & exit /b %RC%

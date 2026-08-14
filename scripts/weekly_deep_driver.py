@@ -38,7 +38,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import date, datetime, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -55,11 +56,48 @@ SPEC_PATH = REPO / ".claude" / "prompts" / "weekly_deep.md"
 DEFAULT_OUT = REPO / "output" / "weekly_deep"
 
 #: 中断（＝再開すればよい）と判定する文言。異常終了と区別する。
+#:
+#: 🔴 2026-08-13 まで `"session limit"` が**入っていなかった**。
+#: 実際の CLI は `You've hit your session limit · resets 1:10am (Asia/Tokyo)` を返すが、
+#: これがどのマーカーにも一致せず「中断」と判定されなかったため、
+#: **残り12節を1つずつ即失敗で消費して打ち切った**（2026-08-13 の実測）。
+#: 待てば必ず成功する失敗を、節ごとの再試行回数で焼き切っていた。
 LIMIT_MARKERS = (
-    "usage limit", "rate limit", "rate_limit", "quota",
+    "usage limit", "session limit", "rate limit", "rate_limit", "quota",
     "上限", "too many requests", "overloaded", "capacity",
-    "insufficient credit", "credit balance",
+    "insufficient credit", "credit balance", "resets ",
 )
+
+#: 解除時刻の抽出。`resets 1:10am (Asia/Tokyo)` / `resets at 13:05` 等。
+_RESET_RE = re.compile(
+    r"resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", re.I)
+
+
+def parse_reset_at(text: str, now: Optional[datetime] = None) -> Optional[datetime]:
+    """エラー文から「いつ解除されるか」を読む。
+
+    再試行の予算は**回数ではなく時刻**である。
+    2026-08-08 は 12:10 に解除される上限に対し 07:12 と 09:12 の2回で
+    予算を使い切り、**解除の3時間前に 15/18 節で出荷**した。
+    取得層では「待てば直る失敗」を区別したのに、執筆層に同じ区別が無かった。
+    """
+    m = _RESET_RE.search(text or "")
+    if not m:
+        return None
+    hour = int(m.group(1))
+    minute = int(m.group(2) or 0)
+    ampm = (m.group(3) or "").lower()
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    if ampm == "am" and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    base = (now or datetime.now()).astimezone()
+    target = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= base:
+        target += timedelta(days=1)      # 深夜の解除は翌日
+    return target
 
 EXIT_OK, EXIT_ERROR, EXIT_INTERRUPTED = 0, 1, 2
 
@@ -83,6 +121,31 @@ def _slim_holding(h: dict) -> dict:
         "name", "symbol", "weight_pct", "value_jpy", "pl_pct",
         "week_change_pct", "leverage",
     )}
+
+
+#: 過熱の判定に要る中身の項目だけ。**ニュース本文は落とす**（別の節の材料）。
+_CONSTITUENT_HEAT_KEYS = (
+    "symbol", "name", "effective_pct", "via", "held_directly",
+    "week_change_pct", "month_change_pct", "quarter_change_pct",
+    "rsi14", "sma200_deviation_pct", "range_52w_position", "from_high_pct",
+    "volatility_pct", "next_earnings", "days_to_earnings", "signals",
+)
+
+
+def _slim_constituents(data: Optional[dict]) -> Optional[dict]:
+    """構成銘柄を過熱判定に要る項目だけに絞る。
+
+    全 dossier をそのまま渡すと1節で3万字を超える。落とすのはニュース本文と
+    ファンダの明細で、**取得できたかどうか（`available` / `covered_pct` /
+    `missing_news`）は必ず残す** — 縮めたことが「材料が無かった」に化けないため。
+    """
+    if not isinstance(data, dict):
+        return data
+    out = {k: v for k, v in data.items() if k != "dossiers"}
+    out["dossiers"] = [{k: d.get(k) for k in _CONSTITUENT_HEAT_KEYS if k in d}
+                       for d in data.get("dossiers") or []]
+    out["slimmed"] = "ニュース本文とファンダ明細は他節の材料のため省略"
+    return out
 
 
 def _sum(rows: list[dict], key: str) -> Optional[float]:
@@ -138,27 +201,55 @@ def slice_pack(pack: dict, section: dict) -> dict:
     # --- 土曜設計書 第3章 の固定骨格 ---
 
     if kind == "verdict":
+        # 判定は本文を全部書いた後に書くが、**仕様 §0 は本文に無い材料も要求する**:
+        # 監視対象（`watch_plan`）とレジーム（`regime`）である。
+        # ⚠️ この2つが欠けていたため、仕様の 🔴 指示が両方とも空振りしていた。
+        # 「ETF経由の曝露を保有と並べるな」「レジームを判定の直後に置け」は、
+        # 材料が届いて初めて守れる。
         return {**meta,
                 "week_diff": pack.get("week_diff"),
                 "cumulative_diff": pack.get("cumulative_diff"),
                 "reconciliation": pack.get("reconciliation"),
                 "falsification": pack.get("falsification"),
+                "watch_plan": pack.get("watch_plan"),
+                "regime": pack.get("regime"),
+                "indices": pack.get("indices"),
                 "forward_actionable": (pack.get("forward") or {}).get("actionable")}
 
+    if kind == "intake":
+        # 🔴 読書台帳は**価格に依存しない**。打ち切り週でもこの節は出す。
+        return {**meta, "reading": pack.get("reading")}
+
     if kind == "reconcile":
+        # 節1 は保有の記述状態（V0）も書く。`reconciliation.description` に入っている。
         return {**meta, "reconciliation": pack.get("reconciliation")}
 
     if kind == "belief":
+        # 信念の変化は**開示原文**で検証するのが筋。価格ではなく事実で見る。
         return {**meta,
                 "falsification": pack.get("falsification"),
+                "primary_filings": pack.get("primary_filings"),
                 "holdings_overview": [_slim_holding(h)
-                                      for h in pack.get("holdings") or []]}
+                                      for h in pack.get("holdings") or []],
+                # 系譜の根（V5）と概念の健全性（V4）。**価格に依存しない材料。**
+                "reading_genealogy": (pack.get("reading") or {}).get("genealogy")}
 
     if kind == "forward":
+        ext = pack.get("external_views") or {}
         return {**meta,
                 "forward": pack.get("forward"),
+                # 仕様 §3 は `forward_horizon`（数ヶ月先）と `constituents`
+                # （中身の企業の決算）を「必ず書け」と指示している。
+                # ⚠️ ここに渡していなかったため、その指示は**届いていなかった**。
+                # パックに入れただけでは節には届かない。
+                "forward_horizon": pack.get("forward_horizon"),
+                "constituents": pack.get("constituents"),
                 "moomoo": pack.get("moomoo"),
                 "indices": pack.get("indices"),
+                # マクロ系の外部見解だけ渡す（改善5）。銘柄別は holding 節へ。
+                "external_views": {"available": ext.get("available"),
+                                   "note": ext.get("note"),
+                                   "views": ext.get("macro_views") or []},
                 "holdings_overview": [_slim_holding(h)
                                       for h in pack.get("holdings") or []]}
 
@@ -184,6 +275,9 @@ def slice_pack(pack: dict, section: dict) -> dict:
                     (pack.get("week_diff") or {}).get("folded") or [])},
                 "execution_audit": pack.get("execution_audit"),
                 "model_audit": pack.get("model_audit"),
+                # 投信の構成が指数と整合しているかの自己検証。**模型の健全性**なので
+                # 監査節の材料。これも今までどの節にも渡っていなかった。
+                "composition_check": pack.get("composition_check"),
                 "prior_context": pack.get("prior_context")}
 
     # --- 機会セクション（銘柄別・過熱）は従来のスライスを流用 ---
@@ -225,6 +319,13 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 # 物語混雑度（提案7）— 「上がっているが持つ理由がない」の判定材料
                 "crowding": ((pack.get("narrative") or {}).get("crowding") or {}).get(
                     sym or f"name:{rows[0].get('name') if rows else ''}"),
+                # この銘柄に言及した外部見解（改善5）。citation に従って書く。
+                "external_views": {
+                    "available": (pack.get("external_views") or {}).get("available"),
+                    "note": (pack.get("external_views") or {}).get("note"),
+                    "views": ((pack.get("external_views") or {}).get("by_symbol")
+                              or {}).get(sym) or [],
+                },
                 "prior_context": pack.get("prior_context")}
 
     if kind == "heat":
@@ -234,7 +335,32 @@ def slice_pack(pack: dict, section: dict) -> dict:
                      "weight_pct": h.get("weight_pct"), "pl_jpy": h.get("pl_jpy"),
                      "pl_pct": h.get("pl_pct"), "technicals": h.get("technicals")}
                     for h in pack.get("holdings") or []],
+                # 仕様 §5 の「レバレッジ・スリーブの実体を必ず書く」に必要。
+                # **ETF の過熱は、中身の過熱である。** ETF 単体の RSI が中立でも
+                # 中身が過熱していることがあるので、両方を同じ皿に載せる。
+                "leverage_sleeve": pack.get("leverage_sleeve"),
+                "constituents": _slim_constituents(pack.get("constituents")),
                 "indices": pack.get("indices")}
+
+    if kind == "outlook":
+        # 短期(1ヶ月)/中期(3ヶ月)/長期(半年以降)の見通しを書く節。
+        # **ここまでの材料を全部使う節なので、渡す材料も一番広い。**
+        # 数字（projection）だけ渡すと「レンジを転記しただけ」の節になるため、
+        # 何がそのレンジを決めるか（中身の決算・レジーム・ドラッグ）を必ず添える。
+        return {**meta,
+                "projection": pack.get("projection"),
+                "vol_calibration": pack.get("vol_calibration"),
+                "positions_assumptions": pack.get("positions_assumptions"),
+                "scenarios": pack.get("scenarios"),
+                "regime": pack.get("regime"),
+                "leverage_sleeve": pack.get("leverage_sleeve"),
+                "forward_horizon": pack.get("forward_horizon"),
+                # 見通しに要るのは「どの決算がいつ来るか」と signal の分布であって
+                # ニュース本文ではない（それは §3 と銘柄別節が扱う）。
+                "constituents": _slim_constituents(pack.get("constituents")),
+                "monthly_contribution": pack.get("monthly_contribution"),
+                "holdings_overview": [_slim_holding(h)
+                                      for h in pack.get("holdings") or []]}
 
     if kind == "cumulative":
         return {**meta,
@@ -246,9 +372,14 @@ def slice_pack(pack: dict, section: dict) -> dict:
                 "scenarios": pack.get("scenarios")}
 
     if kind == "limits":
+        # 系譜サマリを書く節。一次観測が何件あったかがここの中身になる。
         return {**meta,
+                "reading": pack.get("reading"),
                 "vol_calibration": pack.get("vol_calibration"),
                 "positions_assumptions": pack.get("positions_assumptions"),
+                "primary_filings": {
+                    k: v for k, v in (pack.get("primary_filings") or {}).items()
+                    if k != "by_symbol"},
                 "projection": pack.get("projection")}
 
     # actions / summary は「これまでに書いた本文」が材料なので meta だけ
@@ -357,7 +488,7 @@ def build_sections(pack: dict) -> list[dict]:
                          "何をするか』の材料（第0原則: 土曜は買う銘柄を答える日ではない）。"),
             })
         sections.append({
-            "id": "heat", "kind": "heat", "order": 79,
+            "id": "heat", "kind": "heat", "order": 78,
             "heading": "### 過熱 / 売られすぎ 横断ビュー",
             "spec": ("仕様の「### 5. 機会」末尾の横断ビューに従って書く。"
                      "多数決で判定し、算出できる指標が無ければ『判定不能』と書く。"
@@ -365,6 +496,19 @@ def build_sections(pack: dict) -> list[dict]:
         })
 
     sections += [
+        # **静穏週でも必ず書く。** 「今週は何も起きなかった」と
+        # 「これからどこへ向かうか分からない」は別のことだから。
+        {"id": "outlook", "kind": "outlook", "order": 79,
+         "heading": "## 5.9 これから — 短期(1ヶ月) / 中期(3ヶ月) / 長期(半年以降)",
+         "spec": ("仕様の「### 5.9 これから」に従って書く。"
+                  "各ホライズンで **①統計レンジ ②何がその範囲を決めるか（具体的な出来事）"
+                  "③外れるとしたら何が起きたときか（観測点つき）** の3点を必ず書く。"
+                  "**確率を書くな。** レバレッジの非対称性（往復すると戻らない）を"
+                  "必ず具体額で示す。短期・中期・長期で結論が同じなら分析していない —"
+                  "時間軸ごとに効く要因が違うことを書く。"
+                  "レンジは前提の帰結であって予測ではない旨を添え、"
+                  "`vol_calibration` があれば前提σと実測σの乖離に触れる。"),
+         "needs_body": True},
         {"id": "decide", "kind": "decide", "order": 80,
          "heading": "## 6. 事前決定 — 翌週の条件付き政策",
          "spec": ("仕様の「### 6. 事前決定」に従って書く。**これが土曜の唯一の行動。**"
@@ -377,10 +521,22 @@ def build_sections(pack: dict) -> list[dict]:
          "heading": "## 7. 監査 — 執行と模型の健全性",
          "spec": ("仕様の「### 7. 監査」に従って書く。"
                   "累積差分（4週・13週）の緩慢な変化を必ず見る。"
-                  "材料が薄ければ数行で終えてよい。"),
+                  "材料が薄ければ数行で終えてよい。"
+                  "**偏食監査（`reading.audit`）をここに含める。**"
+                  "最小サンプル未達の指標は値を出さず『蓄積中(N/M件)』とだけ書く。"
+                  "禁止表現: 『〜すべきです』『〜できていません』『偏っています』、目標値の提示。"),
          "needs_body": True},
+        {"id": "intake", "kind": "intake", "order": 92,
+         "heading": "## 8. 今週の取り込み",
+         "spec": ("材料は `reading`。**取り込み0件でも必ず1行出す**（折り畳まない）。"
+                  "取り込みが止まっていることは、この層における最も重要な故障だから。"
+                  "件数・provenance の内訳・情報遅延の中央値・概念の更新・"
+                  "thesis 草稿の提案を書く。"
+                  "🔴 vault が読めなかった場合は『取り込み0件』ではなく"
+                  "**『読書台帳を読めなかった』**と書く。"),
+         "needs_body": False},
         {"id": "limits", "kind": "limits", "order": 95,
-         "heading": "## 8. 前提と限界 / 根拠の系譜",
+         "heading": "## 9. 前提と限界 / 根拠の系譜",
          "spec": "仕様の「### 8. 前提と限界 + 系譜サマリ」に従って書く。",
          "needs_body": True},
         {"id": "verdict", "kind": "verdict", "order": 10,
@@ -395,6 +551,60 @@ def build_sections(pack: dict) -> list[dict]:
          "needs_body": True},
     ]
     return sections
+
+
+# ---------------------------------------------------------------------------
+# 節ごとのモデル配分（改善2 / rightmodel）
+# ---------------------------------------------------------------------------
+
+MODELS_CFG_PATH = REPO / "config" / "synthesis_models.yaml"
+
+#: 通過率100%を必須とする節。ここは安い方に落とさない。
+#:   節1 照合 … ここが通らないと以降の全数値が条件付きになる
+#:   節6 事前決定 … 土曜の唯一の成果物であり、誤りが直接ポジションに効く
+CRITICAL_SECTIONS = ("reconcile", "decide")
+
+
+def load_section_models(path: Optional[Path] = None) -> dict:
+    """`config/synthesis_models.yaml` を読む。無ければ空（＝全節が既定モデル）。
+
+    **実測前は意図的に空に近い状態で出荷する。** 推測でモデルを落とすと、
+    どの節が劣化したのか分からないまま品質が下がる。埋めるのは
+    `eval_synthesis.py --sweep` の実測が出てから。
+    """
+    p = path or MODELS_CFG_PATH
+    if not p.exists():
+        return {}
+    try:
+        import yaml
+
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        log(f"synthesis_models.yaml を読めませんでした（既定モデルを使います）: {exc}")
+        return {}
+
+
+def resolve_section_model(section: dict, fallback: str, cfg: Optional[dict] = None) -> str:
+    """この節をどのモデルで書くか。
+
+    優先順: 節ID指定 > 節kind指定 > 設定のdefault > CLI/環境変数の既定。
+    **critical な節は、実測が無い限り既定（＝最上位）から下げない。**
+    """
+    cfg = cfg or {}
+    sections = cfg.get("sections") or {}
+    kinds = cfg.get("kinds") or {}
+    critical = tuple(cfg.get("critical_sections") or CRITICAL_SECTIONS)
+
+    chosen = (
+        sections.get(section.get("id"))
+        or kinds.get(section.get("kind"))
+        or cfg.get("default")
+        or fallback
+    )
+    if section.get("id") in critical and not cfg.get("measured_as_of"):
+        # 実測されていない状態で重要節を下げるのは、根拠のない品質低下でしかない
+        return cfg.get("default") or fallback
+    return str(chosen)
 
 
 # ---------------------------------------------------------------------------
@@ -468,11 +678,19 @@ def looks_like_limit(text: str) -> bool:
 
 
 def run_claude(prompt: str, model: str, timeout: int) -> dict:
-    """`claude -p` を1回叩く。戻り値: {ok, text, interrupted, error}"""
+    """`claude -p` を1回叩く。
+
+    戻り値: {ok, text, interrupted, error, cost_usd, duration_sec, usage}
+
+    `cost_usd` / `duration_sec` / `usage` を返すのは改善2（モデル配分を実測で決める）
+    のため。**節ごとのコストと所要時間が記録されていない**と、どのモデルを
+    どの節に置くべきかを推測でしか決められない。
+    """
     exe = claude_bin()
     if not exe:
         return {"ok": False, "interrupted": False,
                 "error": "claude CLI が見つかりません（CLAUDE_BIN で指定可）"}
+    started = time.time()
 
     cmd = [exe, "-p", "--output-format", "json", "--allowedTools", ""]
     if model:
@@ -494,6 +712,7 @@ def run_claude(prompt: str, model: str, timeout: int) -> dict:
             except subprocess.TimeoutExpired:
                 kill_tree(proc.pid)
                 return {"ok": False, "interrupted": True,
+                        "duration_sec": round(time.time() - started, 1),
                         "error": f"タイムアウト({timeout}s)"}
         raw = out_p.read_text(encoding="utf-8", errors="replace").strip()
         errtxt = err_p.read_text(encoding="utf-8", errors="replace").strip()
@@ -511,15 +730,25 @@ def run_claude(prompt: str, model: str, timeout: int) -> dict:
             break
 
     text = (payload.get("result") or "").strip() if payload else raw
+    elapsed = round(time.time() - started, 1)
+    usage = (payload.get("usage") if isinstance(payload.get("usage"), dict) else {}) or {}
 
     if returncode != 0 or (payload and payload.get("is_error")):
         blob = f"{text}\n{errtxt}"
         return {"ok": False, "interrupted": looks_like_limit(blob),
+                "duration_sec": elapsed,
                 "error": (blob.strip()[:600] or f"exit={returncode}")}
     if not text:
-        return {"ok": False, "interrupted": False, "error": "空の応答"}
+        return {"ok": False, "interrupted": False, "duration_sec": elapsed,
+                "error": "空の応答"}
     return {"ok": True, "interrupted": False, "text": text,
-            "cost_usd": (payload.get("total_cost_usd") if payload else None)}
+            "cost_usd": (payload.get("total_cost_usd") if payload else None),
+            "duration_sec": elapsed,
+            "usage": {
+                "input_tokens": usage.get("input_tokens"),
+                "output_tokens": usage.get("output_tokens"),
+                "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
+            }}
 
 
 def build_prompt(spec: str, section: dict, material: dict, body_so_far: str) -> str:
@@ -596,9 +825,15 @@ def build_header(pack: dict) -> str:
         f"# 週次ポートフォリオ深掘り分析 {today}",
         "",
         f"- 総資産: ¥{_fmt(pf.get('total_jpy'))}"
-        f"（うち現金 ¥{_fmt(pf.get('cash_jpy'))}）",
+        f"（うち現金 ¥{_fmt(pf.get('cash_jpy'))}）"
+        f"{(pf.get('coverage') or {}).get('note') or ''}",
+        # 損益率は分子と分母の母集団が一致するときだけ出る（混合分母の抑制）。
+        # 金額のほうにも母数を必ず添える。**抑制した比率の隣に、母数のない
+        # 合計が並ぶのは同じ誤読を招く。**
         f"- 評価損益: ¥{_fmt(pf.get('total_pl_jpy'))}"
-        f"（{_fmt(pf.get('pl_pct'), '%', 1)}）",
+        f"{(pf.get('pl_coverage') or {}).get('note') or ''}"
+        + (f"（{_fmt(pf.get('pl_pct'), '%', 1)}）" if not pf.get("pl_pct_suppressed")
+           else f" ⚠️ 損益率は非表示: {pf.get('pl_pct_suppressed_reason')}"),
         f"- 為替: {_fmt(meta.get('fx_rate'), ' 円/USD', 2)}",
         f"- 保有データ源: {meta.get('holdings_source') or '不明'}"
         f" / 取り込み: {_import_label(meta.get('holdings_import'))}",
@@ -632,8 +867,152 @@ def build_header(pack: dict) -> str:
     return "\n".join(lines)
 
 
+def missing_sections(state: dict, out_dir: Path) -> list:
+    """本文に載らなかった節を、理由つきで列挙する。
+
+    🔴 2026-08-08、執筆に失敗した3節（監査・限界・判定）が本文から
+    **無言で削除**され、目次にも痕跡が残らなかった。
+    「取得できなかったものを『無かった』と書くな」を全節に課しているシステムが、
+    自分自身の欠落についてだけはそれを守らなかった。
+    """
+    out = []
+    for s in sorted(state.get("sections") or [], key=lambda x: x.get("order", 0)):
+        readable = False
+        if s.get("status") == "done" and s.get("file"):
+            try:
+                readable = bool((out_dir / s["file"]).read_text(encoding="utf-8").strip())
+            except Exception:
+                readable = False
+        if readable:
+            continue
+        out.append({
+            "order": s.get("order"),
+            "heading": str(s.get("heading") or s.get("key") or "(無題)").lstrip("# "),
+            "status": s.get("status") or "unknown",
+            "attempts": s.get("attempts", 0),
+            "reason": s.get("error") or {
+                "pending": "未着手のまま打ち切られました",
+                "failed": "執筆に失敗しました",
+                "done": "ファイルが読めませんでした（保存に失敗）",
+            }.get(s.get("status"), "理由不明"),
+        })
+    return out
+
+
+def build_missing_block(missing: list) -> str:
+    """欠落節の告知ブロック。**本文の最初に置く。**"""
+    if not missing:
+        return ""
+    lines = ["## ⚠️ このレポートには欠落があります", "",
+             f"以下の {len(missing)} 節は本文に含まれていません。"
+             "**書かれなかったのであって、「該当なし」ではありません。**", "",
+             "| 節 | 状態 | 試行 | 理由 |", "|---|---|---|---|"]
+    for m in missing:
+        lines.append(f"| {m['heading']} | {m['status']} | {m['attempts']}回 | {m['reason']} |")
+    lines += ["", "この欠落を埋めるには次を実行してください:", "",
+              "```bash", "python scripts/weekly_deep_driver.py --resume-only", "```"]
+    return "\n".join(lines)
+
+
+def build_abort_report(pack: dict, quality: dict, day: str) -> str:
+    """データが揃わない週の、正しい出力（診断書 C-3）。
+
+    **保有の過半で価格が取れない週は、投資分析を打ち切る。**
+    770行の欠測報告を書くのではなく、次の4つだけを出す。
+
+    1. 何が取れなかったか
+    2. どこで落ちたか
+    3. 修理のために次に走らせるコマンド
+    4. 分析は行っていないという明示
+
+    行数上限は `config/thresholds.yaml` の `data_quality.abort_report_max_lines`。
+    """
+    meta = pack.get("meta") or {}
+    pf = pack.get("portfolio") or {}
+    net = meta.get("network") or {}
+    missing = quality.get("missing") or []
+    reasons = quality.get("reasons") or {}
+    failures = pf.get("price_failures") or []
+
+    lines = [
+        "---",
+        f"title: 週次PF分析 {day}（欠測により分析なし）",
+        "tags: [投資, ポートフォリオ, 週次レポート, 欠測]",
+        f"created: {day}",
+        "---",
+        "",
+        f"# 週次PF分析 {day} — 分析は行っていません",
+        "",
+        "## 結論",
+        "",
+        f"**このレポートに投資判断はありません。** 価格カバレッジが "
+        f"{quality.get('priced', 0)}/{quality.get('total', 0)} "
+        f"（{(quality.get('price_coverage') or 0) * 100:.0f}%、必要 "
+        f"{(quality.get('min_required') or 0) * 100:.0f}%）で、"
+        "**書ける材料が揃っていない**ためです。",
+        "",
+        "これは「値動きが無かった」でも「材料が無かった」でもありません。"
+        "**取りに行けなかった**という意味です。",
+        "",
+        "## 何が取れなかったか",
+        "",
+    ]
+    if missing:
+        lines += ["| 銘柄 | 取得側が残した理由 |", "|---|---|"]
+        for sym in missing[:30]:
+            lines.append(f"| {sym} | {reasons.get(sym) or '理由未記録'} |")
+    else:
+        lines.append("（欠測銘柄の記録がありません。これ自体が取得層の不備です）")
+
+    lines += ["", "## どこで落ちたか", ""]
+    if net:
+        lines.append(f"- ネットワーク: ready={net.get('ready')} / {net.get('message') or '—'}")
+    timings = meta.get("timings_sec") or {}
+    if timings:
+        lines.append(f"- 価格・保有の取得にかかった時間: {timings.get('prices_and_holdings')}秒"
+                     "（極端に短ければ、繋がる前に取りに行っています）")
+    for f in failures[:10]:
+        lines.append(f"- {f.get('id')}: {f.get('reason')}")
+    if not net and not timings and not failures:
+        lines.append("- 落下点の記録がありません（取得層がエラーを残していません）")
+
+    lines += [
+        "",
+        "## 次に走らせるコマンド",
+        "",
+        "```bash",
+        "python scripts/weekly_deep_driver.py --resume-only   # 取り直して書き継ぐ",
+        "python scripts/build_briefing_pack.py                # パックだけ作り直す",
+        "python scripts/weekly_deep_driver.py --force-low-quality  # 承知の上で書かせる",
+        "```",
+        "",
+        "## 明示",
+        "",
+        "分析・推奨・事前決定は**一切行っていません**。"
+        "この週のポジションについて何かを判断する材料として、この文書を使わないでください。",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def save_report(text: str, day: str, dry_run: bool = False) -> str:
+    """レポートを output/ と vault に届ける。欠測報告も同じ経路で届ける。"""
+    filename = f"週次PF分析_{day}.md"
+    if dry_run:
+        return filename
+    from src.output.sync import save_and_sync
+
+    result = save_and_sync(text, filename)
+    for m in result.get("messages", []):
+        log(f"save: {m}")
+    return str(result.get("synced_path") or result.get("output_path") or filename)
+
+
 def assemble(state: dict, out_dir: Path, pack: dict) -> str:
     body = [build_header(pack)]
+    missing = missing_sections(state, out_dir)
+    if missing:
+        body.append(build_missing_block(missing))
     opportunity_heading_done = False
     for s in sorted(state["sections"], key=lambda x: x["order"]):
         if s.get("status") != "done" or not s.get("file"):
@@ -669,6 +1048,26 @@ def body_for_prompt(state: dict, out_dir: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+def refresh_critics(days: int = 7) -> None:
+    """外部批評家の直近発言を取り込む（改善5）。
+
+    パック生成の**前**に走らせる。パック側は台帳を読むだけなので、
+    ここで取れなければ「今週の見解なし」ではなく「取得できなかった」として
+    レポートに出る。失敗しても週次は止めない（全体が opt-in の材料）。
+    """
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "fetch_critics.py"),
+             "--days", str(days), "--apply"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            cwd=str(REPO), timeout=600)
+        tail = [l for l in (proc.stdout or "").splitlines() if l.strip()][-3:]
+        for line in tail:
+            log(f"critics: {line}")
+    except Exception as exc:
+        log(f"critics: 取り込みをスキップしました（{type(exc).__name__}）")
+
+
 def ensure_pack(pack_arg: Optional[str], out_dir: Path, no_moomoo: bool) -> Optional[Path]:
     if pack_arg:
         p = Path(pack_arg)
@@ -702,8 +1101,29 @@ def main() -> int:
                     help="未完了の途中状態がある時だけ動く（再開タスク用。無ければ何もせず終了）")
     ap.add_argument("--dry-run", action="store_true", help="vault 同期せず output/ のみ")
     ap.add_argument("--no-moomoo", action="store_true")
+    ap.add_argument("--no-critics", action="store_true",
+                    help="外部批評家(X)の取り込みをスキップする")
+    ap.add_argument("--critic-days", type=int, default=7,
+                    help="批評家の発言を何日分取り込むか")
+    ap.add_argument("--force-low-quality", action="store_true",
+                    help="価格が取れていないパックでも強制的にレポートを書く（非推奨）")
     args = ap.parse_args()
 
+    # 🔒 実行中はスリープへ戻らせない。
+    #
+    # 「PC はスタンバイで蓋を閉じたまま自動で出る」という前提で組んでいるのに、
+    # **実行中にスリープへ戻らない保証を一切していなかった。**
+    # システムログ実測では3時間ごとに起床して数秒で寝ており、
+    # 5〜10分かかる週次が途中で寝落ちすればネットワークが切れる
+    # （2026-08-08 の「前半全滅・後半成功」と同じ形になる）。
+    # 画面は点けないので、蓋を閉じたまま暗いまま動く。
+    from src.core.power import keep_awake
+
+    with keep_awake("週次レポート"):
+        return _run(args)
+
+
+def _run(args) -> int:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     day = date.today().strftime("%Y%m%d")
@@ -724,22 +1144,81 @@ def main() -> int:
             day = str(state.get("date") or day)
             log(f"未完了の週次({day})を引き継いで再開します。")
 
+    # 欠測で打ち切った週の state は「取り直す予定がある」という記録である。
+    # 節を1つも持たないので、そのまま再開すると空のレポートを組み立ててしまう。
+    # 再開時はパックから作り直す（＝取得のやり直し）。
+    # `--resume-only` でもここは動く。**動かないと打ち切りが放置になる**（H5）。
+    retry_after_abort = bool(state and state.get("aborted_low_quality"))
+    if retry_after_abort:
+        log("前回は欠測で打ち切っています。パックを作り直して取り直します。")
+        state = None
+
     if state:
         pack_path = Path(state["pack_path"])
         if not pack_path.exists():
             log("記録されたパックが見つかりません。作り直します。")
             state = None
 
-    if not state and args.resume_only:
+    if not state and args.resume_only and not retry_after_abort:
         log("再開すべき途中状態はありません（--resume-only のため何もしません）。")
         return EXIT_OK
 
     if not state:
+        if not args.no_critics:
+            refresh_critics(args.critic_days)
         pack_path = ensure_pack(args.pack, out_dir, args.no_moomoo)
         if not pack_path or not pack_path.exists():
             log("❌ パックを用意できませんでした")
             return EXIT_ERROR
         pack = json.loads(pack_path.read_text(encoding="utf-8"))
+
+        # 🔴 価格が取れていないパックからレポートを書かない。
+        #
+        # 2026-08-08、10銘柄中9銘柄の価格が null のままレポートが生成・保存され、
+        # 全節が「取得できず」で埋まった状態で vault に届いた。
+        # **書けない材料から書かせたことが最大の失敗**であり、
+        # 正しい動作は「書かずに中断し、次の起動で取り直す」。
+        # WeeklyDeepResume が3時間ごとに動くので、放置しても自動で回復する。
+        quality = (pack.get("meta") or {}).get("data_quality") or {}
+        if quality and not quality.get("usable", True) and not args.force_low_quality:
+            log(f"⛔ {quality.get('verdict')}")
+            log("   投資分析は行いません。欠測報告だけを出します。")
+            log("   すぐ書かせたい場合: --force-low-quality")
+            try:
+                (out_dir / f"lowquality_{day}.json").write_text(
+                    json.dumps({"at": datetime.now(timezone.utc).isoformat(),
+                                "pack": str(pack_path), "quality": quality,
+                                "network": (pack.get("meta") or {}).get("network")},
+                               ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+
+            # 🔴 打ち切り時も state を必ず残す（H5）。
+            #
+            # 以前はここで state を保存する前に return しており、
+            # `--resume-only` の再開タスクは state が無いと何もしないため、
+            # **その週はレポートが出ないまま誰も気づかない**状態だった。
+            # ログの「3時間後に取り直します」は事実に反していた。
+            state = {
+                "date": day,
+                "pack_path": str(pack_path.resolve()),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "model": args.model,
+                "finished": False,
+                "report_path": None,
+                "aborted_low_quality": True,
+                "quality": quality,
+                "sections": [],
+            }
+            save_state(spath, state)
+
+            report = build_abort_report(pack, quality, day)
+            if args.dry_run:
+                print(report)
+            else:
+                saved = save_report(report, day, dry_run=False)
+                log(f"欠測報告を保存しました: {saved}")
+            return EXIT_INTERRUPTED
         state = {
             "date": day,
             "pack_path": str(pack_path.resolve()),
@@ -756,6 +1235,26 @@ def main() -> int:
         save_state(spath, state)
     else:
         pack = json.loads(Path(state["pack_path"]).read_text(encoding="utf-8"))
+
+    # 解除時刻が記録されていて、まだ来ていないなら書き始めない。
+    # 上限中に叩いても失敗するだけで、ログが汚れ、状態が進まない。
+    ra = state.get("retry_after") if state else None
+    if ra:
+        try:
+            until = datetime.fromisoformat(str(ra))
+            now_ = datetime.now().astimezone()
+            if until > now_:
+                mins = int((until - now_).total_seconds() // 60)
+                log(f"⏳ 使用量上限の解除（{until:%m/%d %H:%M}）まであと約{mins}分です。"
+                    "今回は書きません。")
+                return EXIT_INTERRUPTED
+            state.pop("retry_after", None)
+        except ValueError:
+            state.pop("retry_after", None)
+
+    models_cfg = load_section_models()
+    if models_cfg.get("measured_as_of"):
+        log(f"節別モデル配分を適用します（実測 {models_cfg['measured_as_of']}）")
 
     spec = SPEC_PATH.read_text(encoding="utf-8") if SPEC_PATH.exists() else ""
     if not spec:
@@ -777,35 +1276,54 @@ def main() -> int:
             save_state(spath, state)
             return EXIT_INTERRUPTED
 
-        log(f"✍️  {s['id']} を執筆中（{written + 1}節目）...")
+        section_model = resolve_section_model(s, args.model, models_cfg)
+        log(f"✍️  {s['id']} を執筆中（{written + 1}節目 / model={section_model}）...")
         material = slice_pack(pack, s)
         body = body_for_prompt(state, out_dir) if s.get("needs_body") else ""
         prompt = build_prompt(spec, s, material, body)
 
         t0 = time.time()
-        s["attempts"] = s.get("attempts", 0) + 1
-        res = run_claude(prompt, args.model, args.timeout)
+        res = run_claude(prompt, section_model, args.timeout)
 
         if res.get("ok"):
             fname = f"{s['order']:02d}_{s['id']}.md"
             (sec_dir / fname).write_text(res["text"] + "\n", encoding="utf-8")
             s["status"] = "done"
             s["file"] = f"{day}/{fname}"
+            # 節ごとの実測（改善2: モデル配分を推測でなく実測で決めるための入力）
             s["cost_usd"] = res.get("cost_usd")
+            s["duration_sec"] = res.get("duration_sec")
+            s["usage"] = res.get("usage")
+            s["model_used"] = section_model
             written += 1
             # ログより先に state を確定させる（ログ側の失敗で節を書き直さないため）
             save_state(spath, state)
             log(f"   ✅ {s['id']} 完了（{time.time() - t0:.0f}s）")
             continue
 
+        if res.get("interrupted"):
+            # 🔴 上限・タイムアウトは「待てば直る失敗」である。
+            # **再試行回数を消費しない。** 消費すると、解除を待てば書けたはずの節が
+            # 「2回失敗したので諦める」に化ける（2026-08-13 に12節がこれで落ちた）。
+            s["status"] = "pending"
+            s["error"] = res.get("error")
+            reset_at = parse_reset_at(str(res.get("error") or ""))
+            if reset_at:
+                state["retry_after"] = reset_at.isoformat()
+                log(f"⏸️  使用量上限。解除予定 {reset_at:%m/%d %H:%M} まで待ちます。")
+                log("   （残りの節は消費していません。解除後の起動で続きから書きます）")
+            else:
+                log(f"⏸️  中断（上限/タイムアウト）: {str(res.get('error'))[:120]}")
+                log("   次の起動で続きから再開します。")
+            save_state(spath, state)
+            return EXIT_INTERRUPTED
+
+        # 待っても直らない失敗だけを回数で数える
+        s["attempts"] = s.get("attempts", 0) + 1
         s["status"] = "failed"
         s["error"] = res.get("error")
         save_state(spath, state)
-        if res.get("interrupted"):
-            log(f"⏸️  中断（使用量上限/タイムアウトの可能性）: {res.get('error')}")
-            log("   次の起動で続きから再開します。")
-            return EXIT_INTERRUPTED
-        log(f"   ⚠️ {s['id']} 失敗: {res.get('error')}")
+        log(f"   ⚠️ {s['id']} 失敗（{s['attempts']}回目）: {str(res.get('error'))[:120]}")
 
     remaining = [s for s in state["sections"]
                  if s.get("status") != "done" and s.get("attempts", 0) < args.max_attempts]

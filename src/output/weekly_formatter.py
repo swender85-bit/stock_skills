@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from src.core.portfolio.projection import HORIZON_LABELS
+from src.core.portfolio.projection import HORIZON_LABELS, HORIZON_ORDER
 
 
 def _yen(value: Optional[float]) -> str:
@@ -251,7 +251,7 @@ def _projection(data: dict) -> str:
         "| ホライズン | 下限 | 中央 | 上限 | 中央値の変化 |",
         "|:---|---:|---:|---:|---:|",
     ]
-    for key in ("short", "mid", "long"):
+    for key in HORIZON_ORDER:
         p = proj.get(key)
         if not p:
             continue
